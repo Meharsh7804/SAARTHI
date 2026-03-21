@@ -9,6 +9,8 @@ import SelectVehicle from "./SelectVehicle";
 import Spinner from "./Spinner";
 import Sidebar from "./Sidebar";
 import VerifyEmail from "./VerifyEmail";
+import MapComponent from "./MapComponent";
+import RouteSelector from "./RouteSelector";
 
 export {
   Alert,
@@ -22,4 +24,6 @@ export {
   Sidebar,
   Spinner,
   VerifyEmail,
+  RouteSelector,
+  MapComponent,
 };

@@ -29,38 +29,23 @@ const vehicles = [
 
 function SelectVehicle({
   selectedVehicle,
-  showPanel,
-  setShowPanel,
-  showPreviousPanel,
-  showNextPanel,
   fare,
+  setShowPanel,
+  showNextPanel,
 }) {
   return (
-    <>
-      <div
-        className={`${showPanel ? "bottom-0" : "-bottom-[60%]"} transition-all duration-500 absolute  bg-white w-full rounded-t-xl p-4 pt-0`}
-      >
-        <div
-          onClick={() => {
-            setShowPanel(false);
-            showPreviousPanel(true);
-          }}
-          className="flex justify-center  py-2 pb-4 cursor-pointer"
-        >
-          <ChevronDown strokeWidth={2.5} className="text-zinc-300" />
-        </div>
-        {vehicles.map((vehicle, index) => (
-          <Vehicle
-            key={vehicle.id}
-            vehicle={vehicle}
-            fare={fare}
-            selectedVehicle={selectedVehicle}
-            setShowPanel={setShowPanel}
-            showNextPanel={showNextPanel}
-          />
-        ))}
-      </div>
-    </>
+    <div className="w-full flex flex-col gap-2">
+      {vehicles.map((vehicle, index) => (
+        <Vehicle
+          key={vehicle.id}
+          vehicle={vehicle}
+          fare={fare}
+          selectedVehicle={selectedVehicle}
+          setShowPanel={setShowPanel}
+          showNextPanel={showNextPanel}
+        />
+      ))}
+    </div>
   );
 }
 

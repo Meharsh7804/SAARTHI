@@ -4,6 +4,7 @@ import {
   MapPinPlus,
   PhoneCall,
   SendHorizontal,
+  ArrowLeft,
 } from "lucide-react";
 import Button from "./Button";
 
@@ -21,14 +22,25 @@ function RideDetails({
   rideCreated,
   confirmedRideData,
 }) {
+  if (!showPanel) return null;
+
   return (
-    <>
-      <div
-        className={`${
-          showPanel ? "bottom-0" : "-bottom-[60%]"
-        } transition-all duration-500 absolute bg-white w-full rounded-t-xl p-4 pt-2`}
-      >
-        <div>
+    <div className="w-full bg-white flex flex-col">
+      {!rideCreated && (
+        <div className="flex items-center px-4 py-3 border-b mb-2">
+            <button 
+                onClick={() => {
+                    setShowPanel(false);
+                    showPreviousPanel(true);
+                }}
+                className="p-2 hover:bg-zinc-100 rounded-full transition-colors mr-2"
+            >
+                <ArrowLeft size={20} />
+            </button>
+            <h2 className="text-lg font-bold">Confirm your ride</h2>
+        </div>
+      )}
+      <div className="px-4 pb-4">
           {rideCreated && !confirmedRideData && (
             <>
               <h1 className="text-center">Looking for nearby drivers</h1>
@@ -166,8 +178,7 @@ function RideDetails({
           )}
         </div>
       </div>
-    </>
-  );
+    );
 }
 
 export default RideDetails;

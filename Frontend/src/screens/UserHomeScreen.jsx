@@ -7,6 +7,8 @@ import {
   SelectVehicle,
   RideDetails,
   Sidebar,
+  RouteSelector,
+  MapComponent,
 } from "../components";
 import axios from "axios";
 import debounce from "lodash.debounce";
@@ -14,7 +16,7 @@ import { SocketDataContext } from "../contexts/SocketContext";
 import Console from "../utils/console";
 
 function UserHomeScreen() {
-  const token = localStorage.getItem("token"); // this token is in use
+  const token = localStorage.getItem("token");
   const { socket } = useContext(SocketDataContext);
   const { user } = useUser();
   const [messages, setMessages] = useState(
@@ -27,7 +29,7 @@ function UserHomeScreen() {
   const [rideCreated, setRideCreated] = useState(false);
   const [rideId, setRideId] = useState("");
 
-  // Ride details
+  // Route & Fare details
   const [pickupLocation, setPickupLocation] = useState("");
   const [destinationLocation, setDestinationLocation] = useState("");
   const [selectedVehicle, setSelectedVehicle] = useState("car");
@@ -39,6 +41,10 @@ function UserHomeScreen() {
   const [confirmedRideData, setConfirmedRideData] = useState(null);
   const rideTimeout = useRef(null);
 
+  // Fastest/Safest selections
+  const [selectedRouteMode, setSelectedRouteMode] = useState("fastest");
+  const [routesData, setRoutesData] = useState(null);
+
   // Panels
   const [showFindTripPanel, setShowFindTripPanel] = useState(true);
   const [showSelectVehiclePanel, setShowSelectVehiclePanel] = useState(false);
@@ -49,13 +55,8 @@ function UserHomeScreen() {
       if (inputValue.length >= 3) {
         try {
           const response = await axios.get(
-            `${import.meta.env.VITE_SERVER_URL
-            }/map/get-suggestions?input=${inputValue}`,
-            {
-              headers: {
-                token: token,
-              },
-            }
+            `${import.meta.env.VITE_SERVER_URL}/map/get-suggestions?input=${inputValue}`,
+            { headers: { token: token } }
           );
           Console.log(response.data);
           setLocationSuggestion(response.data);
@@ -75,34 +76,23 @@ function UserHomeScreen() {
     } else if (e.target.id == "destination") {
       setDestinationLocation(value);
     }
-
-    // if (import.meta.env.VITE_ENVIRONMENT === "production") {
     handleLocationChange(value, token);
-    // }
-
     if (e.target.value.length < 3) {
       setLocationSuggestion([]);
     }
   };
 
   const getDistanceAndFare = async (pickupLocation, destinationLocation) => {
-    Console.log(pickupLocation, destinationLocation);
     try {
       setLoading(true);
-      setMapLocation(
-        `https://www.google.com/maps?q=${pickupLocation} to ${destinationLocation}&output=embed`
-      );
       const response = await axios.get(
-        `${import.meta.env.VITE_SERVER_URL
-        }/ride/get-fare?pickup=${pickupLocation}&destination=${destinationLocation}`,
-        {
-          headers: {
-            token: token,
-          },
-        }
+        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${pickupLocation}&destination=${destinationLocation}`,
+        { headers: { token: token } }
       );
-      Console.log(response);
-      setFare(response.data.fare);
+      
+      setRoutesData(response.data);
+      setFare(response.data.fastest.fare);
+      setSelectedRouteMode('fastest');
 
       setShowFindTripPanel(false);
       setShowSelectVehiclePanel(true);
@@ -114,6 +104,11 @@ function UserHomeScreen() {
     }
   };
 
+  const handleRouteModeChange = (mode) => {
+    setSelectedRouteMode(mode);
+    setFare(routesData[mode].fare);
+  };
+
   const createRide = async () => {
     try {
       setLoading(true);
@@ -123,14 +118,11 @@ function UserHomeScreen() {
           pickup: pickupLocation,
           destination: destinationLocation,
           vehicleType: selectedVehicle,
+          selectedRouteMode: selectedRouteMode,
         },
-        {
-          headers: {
-            token: token,
-          },
-        }
+        { headers: { token: token } }
       );
-      Console.log(response);
+      
       const rideData = {
         pickup: pickupLocation,
         destination: destinationLocation,
@@ -144,7 +136,6 @@ function UserHomeScreen() {
       setRideCreated(true);
       setRideId(response.data._id);
 
-      // Automatically cancel the ride after 1.5 minutes
       rideTimeout.current = setTimeout(() => {
         cancelRide();
       }, import.meta.env.VITE_RIDE_TIMEOUT);
@@ -163,13 +154,8 @@ function UserHomeScreen() {
     try {
       setLoading(true);
       await axios.get(
-        `${import.meta.env.VITE_SERVER_URL}/ride/cancel?rideId=${rideDetails._id || rideDetails.confirmedRideData._id
-        }`,
-        {
-          headers: {
-            token: token,
-          },
-        }
+        `${import.meta.env.VITE_SERVER_URL}/ride/cancel?rideId=${rideDetails._id || rideDetails.confirmedRideData._id}`,
+        { headers: { token: token } }
       );
       setLoading(false);
       updateLocation();
@@ -180,99 +166,59 @@ function UserHomeScreen() {
       localStorage.removeItem("rideDetails");
       localStorage.removeItem("panelDetails");
       localStorage.removeItem("messages");
-      localStorage.removeItem("showPanel");
-      localStorage.removeItem("showBtn");
     } catch (error) {
       Console.log(error);
       setLoading(false);
     }
   };
-  // Set ride details to default values
+
   const setDefaults = () => {
     setPickupLocation("");
     setDestinationLocation("");
     setSelectedVehicle("car");
-    setFare({
-      auto: 0,
-      car: 0,
-      bike: 0,
-    });
+    setFare({ auto: 0, car: 0, bike: 0 });
     setConfirmedRideData(null);
     setRideCreated(false);
+    setRoutesData(null);
   };
 
-  // Update Location
   const updateLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setMapLocation(
-            `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}&output=embed`
-          );
+          setMapLocation(`https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}&output=embed`);
         },
-        (error) => {
-          console.error("Error fetching position:", error);
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              console.error("User denied the request for Geolocation.");
-              break;
-            case error.POSITION_UNAVAILABLE:
-              console.error("Location information is unavailable.");
-              break;
-            case error.TIMEOUT:
-              console.error("The request to get user location timed out.");
-              break;
-            default:
-              console.error("An unknown error occurred.");
-          }
-        }
+        (error) => console.error("Error fetching position:", error)
       );
     }
   };
 
-  // Update Location
   useEffect(() => {
     updateLocation();
   }, []);
 
-  // Socket Events
   useEffect(() => {
     if (user._id) {
-      socket.emit("join", {
-        userId: user._id,
-        userType: "user",
-      });
+      socket.emit("join", { userId: user._id, userType: "user" });
     }
 
     socket.on("ride-confirmed", (data) => {
-      Console.log("Clearing Timeout", rideTimeout);
       clearTimeout(rideTimeout.current);
-      Console.log("Cleared Timeout");
-      Console.log("Ride Confirmed");
-      Console.log(data.captain.location);
-      setMapLocation(
-        `https://www.google.com/maps?q=${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]} to ${pickupLocation}&output=embed`
-      );
+      setMapLocation(`https://www.google.com/maps?q=${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]} to ${pickupLocation}&output=embed`);
       setConfirmedRideData(data);
     });
 
     socket.on("ride-started", (data) => {
-      Console.log("Ride started");
-      setMapLocation(
-        `https://www.google.com/maps?q=${data.pickup} to ${data.destination}&output=embed`
-      );
+      setMapLocation(`https://www.google.com/maps?q=${data.pickup} to ${data.destination}&output=embed`);
     });
 
     socket.on("captain-location-updated", (data) => {
       if (confirmedRideData) {
-        setMapLocation(
-          `https://www.google.com/maps?q=${data.location.ltd},${data.location.lng} to ${pickupLocation}&output=embed`
-        );
+        setMapLocation(`https://www.google.com/maps?q=${data.location.ltd},${data.location.lng} to ${pickupLocation}&output=embed`);
       }
     });
 
     socket.on("ride-ended", (data) => {
-      Console.log("Ride Ended");
       setShowRideDetailsPanel(false);
       setShowSelectVehiclePanel(false);
       setShowFindTripPanel(true);
@@ -280,19 +226,7 @@ function UserHomeScreen() {
       localStorage.removeItem("rideDetails");
       localStorage.removeItem("panelDetails");
       socket.off("captain-location-updated");
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            setMapLocation(
-              `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}&output=embed`
-            );
-          },
-          (error) => {
-            console.error("Error fetching position:", error);
-          }
-        );
-      }
+      updateLocation();
     });
 
     return () => {
@@ -303,7 +237,6 @@ function UserHomeScreen() {
     };
   }, [user]);
 
-  // Get ride details
   useEffect(() => {
     const storedRideDetails = localStorage.getItem("rideDetails");
     const storedPanelDetails = localStorage.getItem("panelDetails");
@@ -326,7 +259,6 @@ function UserHomeScreen() {
     }
   }, []);
 
-  // Store Ride Details
   useEffect(() => {
     const rideData = {
       pickup: pickupLocation,
@@ -337,22 +269,10 @@ function UserHomeScreen() {
       _id: rideId,
     };
     localStorage.setItem("rideDetails", JSON.stringify(rideData));
-  }, [
-    pickupLocation,
-    destinationLocation,
-    selectedVehicle,
-    fare,
-    confirmedRideData,
-    rideId,
-  ]);
+  }, [pickupLocation, destinationLocation, selectedVehicle, fare, confirmedRideData, rideId]);
 
-  // Store panel information
   useEffect(() => {
-    const panelDetails = {
-      showFindTripPanel,
-      showSelectVehiclePanel,
-      showRideDetailsPanel,
-    };
+    const panelDetails = { showFindTripPanel, showSelectVehiclePanel, showRideDetailsPanel };
     localStorage.setItem("panelDetails", JSON.stringify(panelDetails));
   }, [showFindTripPanel, showSelectVehiclePanel, showRideDetailsPanel]);
 
@@ -362,106 +282,138 @@ function UserHomeScreen() {
 
   useEffect(() => {
     socket.emit("join-room", confirmedRideData?._id);
-
     socket.on("receiveMessage", (msg) => {
       setMessages((prev) => [...prev, { msg, by: "other" }]);
     });
-
     return () => {
       socket.off("receiveMessage");
     };
   }, [confirmedRideData]);
 
   return (
-    <div
-      className="relative w-full h-dvh bg-contain"
-      style={{ backgroundImage: `url(${map})` }}
-    >
+    <div className="relative w-full h-dvh bg-zinc-50 overflow-hidden">
       <Sidebar />
-      <iframe
-        src={mapLocation}
-        className="absolute map w-full h-[120vh]"
-        allowFullScreen={true}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-      ></iframe>
-      {/* Find a trip component */}
-      {showFindTripPanel && (
-        <div className="absolute bottom-0 flex flex-col justify-start p-4 pb-2 gap-4 rounded-t-lg bg-white h-fit w-full">
-          <h1 className="text-2xl font-semibold">Find a trip</h1>
-          <div className="flex items-center relative w-full h-fit">
-            <div className="h-3/5 w-[3px] flex flex-col items-center justify-between bg-black rounded-full absolute mx-5">
-              <div className="w-2 h-2 rounded-full border-[3px]  bg-white border-black"></div>
-              <div className="w-2 h-2 rounded-sm border-[3px]  bg-white border-black"></div>
+      
+      {/* Map Section */}
+      <div className="absolute top-0 left-0 w-full h-[70vh] z-0">
+        {routesData ? (
+          <MapComponent 
+            routesData={routesData} 
+            selectedMode={selectedRouteMode} 
+            onRouteClick={handleRouteModeChange} 
+          />
+        ) : (
+          <iframe
+            src={mapLocation}
+            className="w-full h-full border-none"
+            allowFullScreen={true}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          ></iframe>
+        )}
+      </div>
+
+      {/* Main Panel */}
+      <div className={`absolute bottom-0 w-full bg-white rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.1)] z-10 transition-all duration-500 max-h-[90vh] flex flex-col overflow-hidden`}>
+        
+        {/* Step 1: Find a trip */}
+        {showFindTripPanel && (
+          <div className="p-6">
+            <h1 className="text-2xl font-bold mb-4">Find a trip</h1>
+            <div className="flex flex-col gap-3 relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-black/10 z-0"></div>
+                <div className="relative">
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-black bg-white z-10 mx-3"></div>
+                    <input
+                        id="pickup"
+                        placeholder="Add a pick-up location"
+                        className="w-full bg-zinc-100 pl-10 pr-4 py-3 rounded-xl outline-none focus:ring-2 ring-black/5 text-sm"
+                        value={pickupLocation}
+                        onChange={onChangeHandler}
+                        autoComplete="off"
+                    />
+                </div>
+                <div className="relative">
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-2 border-2 border-black bg-white z-10 mx-3"></div>
+                    <input
+                        id="destination"
+                        placeholder="Add a drop-off location"
+                        className="w-full bg-zinc-100 pl-10 pr-4 py-3 rounded-xl outline-none focus:ring-2 ring-black/5 text-sm"
+                        value={destinationLocation}
+                        onChange={onChangeHandler}
+                        autoComplete="off"
+                    />
+                </div>
             </div>
-            <div>
-              <input
-                id="pickup"
-                placeholder="Add a pick-up location"
-                className="w-full bg-zinc-100 pl-10 pr-4 py-3 rounded-lg outline-black text-sm mb-2 truncate"
-                value={pickupLocation}
-                onChange={onChangeHandler}
-                autoComplete="off"
-              />
-              <input
-                id="destination"
-                placeholder="Add a drop-off location"
-                className="w-full bg-zinc-100 pl-10 pr-4 py-3 rounded-lg outline-black text-sm truncate"
-                value={destinationLocation}
-                onChange={onChangeHandler}
-                autoComplete="off"
-              />
+
+            {pickupLocation.length > 2 && destinationLocation.length > 2 && (
+              <div className="mt-4">
+                <Button
+                    title={"Search"}
+                    loading={loading}
+                    fun={() => getDistanceAndFare(pickupLocation, destinationLocation)}
+                />
+              </div>
+            )}
+
+            <div className="mt-4 max-h-[25vh] overflow-y-auto">
+              {locationSuggestion.length > 0 && (
+                <LocationSuggestions
+                  suggestions={locationSuggestion}
+                  setSuggestions={setLocationSuggestion}
+                  setPickupLocation={setPickupLocation}
+                  setDestinationLocation={setDestinationLocation}
+                  input={selectedInput}
+                />
+              )}
             </div>
           </div>
-          {pickupLocation.length > 2 && destinationLocation.length > 2 && (
-            <Button
-              title={"Search"}
-              loading={loading}
-              fun={() => {
-                getDistanceAndFare(pickupLocation, destinationLocation);
+        )}
+
+        {/* Step 2: Select Vehicle & Route */}
+        {showSelectVehiclePanel && routesData && (
+          <>
+            <RouteSelector 
+              selectedMode={selectedRouteMode} 
+              onSelect={handleRouteModeChange} 
+              fastest={routesData.fastest}
+              safest={routesData.safest}
+              onBack={() => {
+                  setShowSelectVehiclePanel(false);
+                  setShowFindTripPanel(true);
               }}
             />
-          )}
+            <div className="px-4 pb-4 overflow-y-auto">
+                <SelectVehicle
+                    selectedVehicle={setSelectedVehicle}
+                    setShowPanel={setShowSelectVehiclePanel}
+                    showNextPanel={setShowRideDetailsPanel}
+                    fare={fare}
+                />
+            </div>
+          </>
+        )}
 
-          <div className="w-full max-h-[40vh] overflow-y-auto">
-            {locationSuggestion.length > 0 && (
-              <LocationSuggestions
-                suggestions={locationSuggestion}
-                setSuggestions={setLocationSuggestion}
-                setPickupLocation={setPickupLocation}
-                setDestinationLocation={setDestinationLocation}
-                input={selectedInput}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Select Vehicle Panel */}
-      <SelectVehicle
-        selectedVehicle={setSelectedVehicle}
-        showPanel={showSelectVehiclePanel}
-        setShowPanel={setShowSelectVehiclePanel}
-        showPreviousPanel={setShowFindTripPanel}
-        showNextPanel={setShowRideDetailsPanel}
-        fare={fare}
-      />
-
-      {/* Ride Details Panel */}
-      <RideDetails
-        pickupLocation={pickupLocation}
-        destinationLocation={destinationLocation}
-        selectedVehicle={selectedVehicle}
-        fare={fare}
-        showPanel={showRideDetailsPanel}
-        setShowPanel={setShowRideDetailsPanel}
-        showPreviousPanel={setShowSelectVehiclePanel}
-        createRide={createRide}
-        cancelRide={cancelRide}
-        loading={loading}
-        rideCreated={rideCreated}
-        confirmedRideData={confirmedRideData}
-      />
+        {/* Step 3: Ride Details & Confirmation */}
+        {showRideDetailsPanel && (
+            <div className="overflow-y-auto">
+                <RideDetails
+                  pickupLocation={pickupLocation}
+                  destinationLocation={destinationLocation}
+                  selectedVehicle={selectedVehicle}
+                  fare={fare}
+                  showPanel={showRideDetailsPanel}
+                  setShowPanel={setShowRideDetailsPanel}
+                  showPreviousPanel={setShowSelectVehiclePanel}
+                  createRide={createRide}
+                  cancelRide={cancelRide}
+                  loading={loading}
+                  rideCreated={rideCreated}
+                  confirmedRideData={confirmedRideData}
+                />
+            </div>
+        )}
+      </div>
     </div>
   );
 }

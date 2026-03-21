@@ -76,6 +76,29 @@ module.exports.getAutoCompleteSuggestions = async (input) => {
   }
 };
 
+module.exports.getDetailedRoutes = async (origin, destination) => {
+    if (!origin || !destination) {
+        throw new Error("Origin and destination are required");
+    }
+    const apiKey = process.env.GOOGLE_MAPS_API;
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(
+        origin
+    )}&destination=${encodeURIComponent(destination)}&alternatives=true&key=${apiKey}`;
+
+    try {
+        const response = await axios.get(url);
+        if (response.data.status === "OK") {
+            return response.data.routes;
+        } else {
+            console.error(response.data.status, response.data.error_message);
+            throw new Error("Unable to fetch detailed routes");
+        }
+    } catch (err) {
+        console.error(err);
+        throw err;
+    }
+};
+
 module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType) => {
   // radius in km
   

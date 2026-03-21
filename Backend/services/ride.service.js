@@ -2,6 +2,7 @@ const captainModel = require("../models/captain.model");
 const rideModel = require("../models/ride.model");
 const mapService = require("./map.service");
 const crypto = require("crypto");
+const safetyService = require("./safety.service");
 
 const getFare = async (pickup, destination) => {
   if (!pickup || !destination) {
@@ -51,6 +52,60 @@ const getFare = async (pickup, destination) => {
 
 module.exports.getFare = getFare;
 
+module.exports.getFareWithRoutes = async (pickup, destination) => {
+    if (!pickup || !destination) {
+        throw new Error("Pickup and destination are required");
+    }
+
+    const routes = await mapService.getDetailedRoutes(pickup, destination);
+
+    const processedRoutes = routes.map(route => {
+        const leg = route.legs[0];
+        const distanceValue = leg.distance.value;
+        const durationValue = leg.duration.value;
+        const safetyScore = safetyService.calculateRouteSafety(route);
+
+        const baseFare = { auto: 30, car: 50, bike: 20 };
+        const perKmRate = { auto: 10, car: 15, bike: 8 };
+        const perMinuteRate = { auto: 2, car: 3, bike: 1.5 };
+
+        const fare = {
+            auto: Math.round(baseFare.auto + (distanceValue / 1000) * perKmRate.auto + (durationValue / 60) * perMinuteRate.auto),
+            car: Math.round(baseFare.car + (distanceValue / 1000) * perKmRate.car + (durationValue / 60) * perMinuteRate.car),
+            bike: Math.round(baseFare.bike + (distanceValue / 1000) * perKmRate.bike + (durationValue / 60) * perMinuteRate.bike),
+        };
+
+        return {
+            fare,
+            distance: leg.distance,
+            duration: leg.duration,
+            safetyScore,
+            polyline: route.overview_polyline.points,
+            summary: route.summary
+        };
+    });
+
+    // Find Fastest
+    const fastest = processedRoutes.reduce((prev, curr) =>
+        prev.duration.value < curr.duration.value ? prev : curr
+    );
+
+    // Find Safest
+    const safest = processedRoutes.reduce((prev, curr) =>
+        prev.safetyScore > curr.safetyScore ? prev : curr
+    );
+
+    // Pricing Logic: Safest route price = base_price + ₹2 to ₹3 extra
+    // We apply this extra cost to the 'safest' route's fare
+    safest.fare = {
+        auto: safest.fare.auto + 3,
+        car: safest.fare.car + 5,
+        bike: safest.fare.bike + 2
+    };
+
+    return { fastest, safest };
+};
+
 function getOtp(num) {
   function generateOtp(num) {
     const otp = crypto
@@ -66,13 +121,18 @@ module.exports.createRide = async ({
   pickup,
   destination,
   vehicleType,
+  selectedRouteMode = 'fastest'
 }) => {
   if (!user || !pickup || !destination || !vehicleType) {
     throw new Error("All fields are required");
   }
 
   try {
-    const { fare, distanceTime } = await getFare(pickup, destination);
+    const response = await module.exports.getFareWithRoutes(pickup, destination);
+    const selectedRoute = response[selectedRouteMode];
+    const fare = selectedRoute.fare;
+    const distanceValue = selectedRoute.distance.value;
+    const durationValue = selectedRoute.duration.value;
 
     const ride = await rideModel.create({
       user,
@@ -81,8 +141,8 @@ module.exports.createRide = async ({
       otp: getOtp(6),
       fare: fare[vehicleType],
       vehicle: vehicleType,
-      distance: distanceTime.distance.value,
-      duration: distanceTime.duration.value,
+      distance: distanceValue,
+      duration: durationValue,
     });
 
     return ride;

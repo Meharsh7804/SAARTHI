@@ -46,7 +46,7 @@ module.exports.createRide = async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { pickup, destination, vehicleType } = req.body;
+  const { pickup, destination, vehicleType, selectedRouteMode } = req.body;
 
   try {
     const ride = await rideService.createRide({
@@ -54,6 +54,7 @@ module.exports.createRide = async (req, res) => {
       pickup,
       destination,
       vehicleType,
+      selectedRouteMode: selectedRouteMode || 'fastest'
     });
 
     const user = await userModel.findOne({ _id: req.user._id });
@@ -111,11 +112,11 @@ module.exports.getFare = async (req, res) => {
   const { pickup, destination } = req.query;
 
   try {
-    const { fare, distanceTime } = await rideService.getFare(
+    const { fastest, safest } = await rideService.getFareWithRoutes(
       pickup,
       destination
     );
-    return res.status(200).json({ fare, distanceTime });
+    return res.status(200).json({ fastest, safest });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
