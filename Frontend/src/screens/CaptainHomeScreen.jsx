@@ -248,6 +248,7 @@ function CaptainHomeScreen() {
 
   useEffect(() => {
     if (captain._id) {
+      console.log("Captain joining socket:", captain._id);
       socket.emit("join", {
         userId: captain._id,
         userType: "captain",
@@ -275,7 +276,7 @@ function CaptainHomeScreen() {
         socket.off("ride-cancelled");
       };
     }
-  }, [captain]);
+  }, [captain, socket]);
 
   useEffect(() => {
     localStorage.setItem("messages", JSON.stringify(messages));

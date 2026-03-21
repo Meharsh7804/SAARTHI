@@ -35,8 +35,16 @@ function initializeSocket(server) {
       if (userType === "user") {
         await userModel.findByIdAndUpdate(userId, { socketId: socket.id });
       } else if (userType === "captain") {
-        await captainModel.findByIdAndUpdate(userId, { socketId: socket.id });
+        await captainModel.findByIdAndUpdate(userId, { 
+          socketId: socket.id,
+          status: "active" 
+        });
       }
+    });
+
+    socket.on("disconnect", async () => {
+      console.log(`Client disconnected: ${socket.id}`);
+      await captainModel.findOneAndUpdate({ socketId: socket.id }, { status: "inactive" });
     });
 
     socket.on("update-location-captain", async (data) => {

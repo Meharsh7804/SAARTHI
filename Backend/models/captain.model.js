@@ -82,6 +82,14 @@ const captainSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    avgSafetyScore: {
+      type: Number,
+      default: 0,
+    },
+    totalRides: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

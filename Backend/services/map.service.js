@@ -1,5 +1,6 @@
 const axios = require("axios");
 const captainModel = require("../models/captain.model");
+const userModel = require("../models/user.model");
 
 module.exports.getAddressCoordinate = async (address) => {
   const apiKey = process.env.GOOGLE_MAPS_API;
@@ -99,7 +100,7 @@ module.exports.getDetailedRoutes = async (origin, destination) => {
     }
 };
 
-module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType) => {
+module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType, userId = null) => {
   // radius in km
   
   try {
@@ -110,8 +111,25 @@ module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType) =>
         },
       },
       "vehicle.type": vehicleType,
+      // status: "active",
     });
-    return captains;
+
+    if (!userId) {
+      return captains.sort((a, b) => (b.avgSafetyScore || 0) - (a.avgSafetyScore || 0));
+    }
+
+    const user = await userModel.findById(userId);
+    const preferredDriverIds = user?.preferredDrivers?.map(id => id.toString()) || [];
+
+    return captains.sort((a, b) => {
+      const aIsPreferred = preferredDriverIds.includes(a._id.toString());
+      const bIsPreferred = preferredDriverIds.includes(b._id.toString());
+
+      if (aIsPreferred && !bIsPreferred) return -1;
+      if (!aIsPreferred && bIsPreferred) return 1;
+
+      return (b.avgSafetyScore || 0) - (a.avgSafetyScore || 0);
+    });
   } catch (error) {
     throw new Error("Error in getting captain in radius: " + error.message);
   }

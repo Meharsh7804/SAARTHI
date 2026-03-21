@@ -12,6 +12,8 @@ import VerifyEmail from "./VerifyEmail";
 import MapComponent from "./MapComponent";
 import RouteSelector from "./RouteSelector";
 import SplashScreen from "./SplashScreen";
+import StarRatingComponent from "./StarRatingComponent";
+import FeedbackModal from "./FeedbackModal";
 
 export {
   Alert,
@@ -28,4 +30,6 @@ export {
   RouteSelector,
   MapComponent,
   SplashScreen,
+  StarRatingComponent,
+  FeedbackModal,
 };

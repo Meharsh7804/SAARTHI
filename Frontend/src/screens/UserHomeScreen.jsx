@@ -10,6 +10,7 @@ import {
   Sidebar,
   RouteSelector,
   MapComponent,
+  FeedbackModal,
 } from "../components";
 import axios from "axios";
 import debounce from "lodash.debounce";
@@ -51,6 +52,8 @@ function UserHomeScreen() {
   const [showFindTripPanel, setShowFindTripPanel] = useState(true);
   const [showSelectVehiclePanel, setShowSelectVehiclePanel] = useState(false);
   const [showRideDetailsPanel, setShowRideDetailsPanel] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [lastRideData, setLastRideData] = useState(null);
 
   const handleLocationChange = useCallback(
     debounce(async (inputValue, token) => {
@@ -228,6 +231,8 @@ function UserHomeScreen() {
     });
 
     socket.on("ride-ended", (data) => {
+      setLastRideData(data);
+      setShowFeedbackModal(true);
       setShowRideDetailsPanel(false);
       setShowSelectVehiclePanel(false);
       setShowFindTripPanel(true);
@@ -245,7 +250,7 @@ function UserHomeScreen() {
       socket.off("ride-ended");
       socket.off("captain-location-updated");
     };
-  }, [user]);
+  }, [user, socket]);
 
   useEffect(() => {
     const storedRideDetails = localStorage.getItem("rideDetails");
@@ -291,7 +296,9 @@ function UserHomeScreen() {
   }, [messages]);
 
   useEffect(() => {
-    socket.emit("join-room", confirmedRideData?._id);
+    if (confirmedRideData?._id) {
+      socket.emit("join-room", confirmedRideData?._id);
+    }
     socket.on("receiveMessage", (msg) => {
       setMessages((prev) => [...prev, { msg, by: "other" }]);
     });
@@ -430,6 +437,13 @@ function UserHomeScreen() {
             </div>
         )}
       </div>
+
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        rideId={lastRideData?._id}
+        driverName={`${lastRideData?.captain?.fullname?.firstname} ${lastRideData?.captain?.fullname?.lastname}`}
+      />
     </div>
   );
 }

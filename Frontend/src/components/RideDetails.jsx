@@ -78,11 +78,22 @@ function RideDetails({
 
             {confirmedRideData?._id && (
               <div className="leading-4 text-right">
-                <h1 className="text-sm ">
+                <h1 className="text-sm font-semibold">
                   {confirmedRideData?.captain?.fullname?.firstname}{" "}
                   {confirmedRideData?.captain?.fullname?.lastname}
                 </h1>
-                <h1 className="font-semibold">
+                <div className="flex items-center justify-end gap-1 mt-0.5">
+                  <span className="text-xs font-bold text-yellow-600">
+                    ⭐ {confirmedRideData?.captain?.avgSafetyScore || "N/A"}{" "}
+                    Safety Rating
+                  </span>
+                  {confirmedRideData?.captain?.avgSafetyScore > 4 && (
+                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold border border-green-200">
+                      Highly Rated
+                    </span>
+                  )}
+                </div>
+                <h1 className="font-medium text-sm mt-1">
                   {confirmedRideData?.captain?.vehicle?.number}
                 </h1>
                 <h1 className="capitalize text-xs text-zinc-400">
@@ -90,7 +101,7 @@ function RideDetails({
                   {confirmedRideData?.captain?.vehicle?.color}{" "}
                   {confirmedRideData?.captain?.vehicle?.type}
                 </h1>
-                <span className="mt-1 inline-block bg-black text-white px-3 py-1 rounded font-semibold">
+                <span className="mt-2 inline-block bg-black text-white px-3 py-1 rounded-lg text-sm font-bold">
                   OTP: {confirmedRideData?.otp}
                 </span>
               </div>

@@ -74,7 +74,8 @@ module.exports.createRide = async (req, res) => {
           pickupCoordinates.ltd,
           pickupCoordinates.lng,
           4,
-          vehicleType
+          vehicleType,
+          req.user._id
         );
 
         ride.otp = "";

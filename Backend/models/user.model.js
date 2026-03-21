@@ -45,6 +45,12 @@ const userSchema = new mongoose.Schema(
         ref: "Ride",
       },
     ],
+    preferredDrivers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Captain",
+      },
+    ],
   },
   { timestamps: true }
 );
