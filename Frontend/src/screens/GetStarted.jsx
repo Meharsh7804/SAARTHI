@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "../components/index";
 import background from "/get_started_illustration.jpg";
 import { useNavigate } from "react-router-dom";
-import logo from '/logo-quickride.png'
+import logo from '/saarthi.png'
 
 function GetStarted() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ function GetStarted() {
       style={{ backgroundImage: `url(${background})` }}
     >
       <img
-        className="h-10 object-contain m-4 self-start"
+        className="h-16 object-contain m-4 self-start"
         src={logo}
         alt="Logo"
       />
@@ -32,7 +32,8 @@ function GetStarted() {
         className="flex flex-col bg-white p-4 pb-8 gap-8 rounded-t-lg
       "
       >
-        <h1 className="text-2xl font-semibold">Get started with QuickRide</h1>
+        <h1 className="text-2xl font-semibold">Get started with Saarthi</h1>
+        <p className="text-sm text-zinc-500 -mt-7">Your Journey, Our Watch</p>
         <Button
           title={"Continue"}
           path={"/login"}

@@ -11,6 +11,7 @@ import Sidebar from "./Sidebar";
 import VerifyEmail from "./VerifyEmail";
 import MapComponent from "./MapComponent";
 import RouteSelector from "./RouteSelector";
+import SplashScreen from "./SplashScreen";
 
 export {
   Alert,
@@ -26,4 +27,5 @@ export {
   VerifyEmail,
   RouteSelector,
   MapComponent,
+  SplashScreen,
 };

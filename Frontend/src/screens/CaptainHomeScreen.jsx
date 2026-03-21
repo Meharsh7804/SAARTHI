@@ -1,5 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import map from "/map.png";
+import logo from "/saarthi.png";
 import axios from "axios";
 import { useCaptain } from "../contexts/CaptainContext";
 import { Phone, User } from "lucide-react";
@@ -336,6 +337,12 @@ function CaptainHomeScreen() {
       className="relative w-full h-dvh bg-contain"
       style={{ backgroundImage: `url(${map})` }}
     >
+      <Sidebar />
+      <img
+        className="h-12 object-contain absolute left-5 top-5 z-10"
+        src={logo}
+        alt="Logo"
+      />
       <Alert
         heading={alert.heading}
         text={alert.text}
@@ -343,7 +350,6 @@ function CaptainHomeScreen() {
         onClose={hideAlert}
         type={alert.type}
       />
-      <Sidebar />
       <iframe
         src={mapLocation}
         className="map w-full h-[80vh]"

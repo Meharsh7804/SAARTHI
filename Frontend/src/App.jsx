@@ -18,15 +18,28 @@ import {
   ResetPassword,
   ForgotPassword
 } from "./screens/";
+import { SplashScreen } from "./components";
 import { logger } from "./utils/logger";
 import { SocketDataContext } from "./contexts/SocketContext";
-import { useEffect, useContext } from "react";
+import { useEffect, useContext, useState } from "react";
 import { ChevronLeft, Trash2 } from "lucide-react";
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="w-full h-dvh flex items-center">
-      <div className="relative w-full sm:min-w-96 sm:w-96 h-full bg-white overflow-hidden">
+      {showSplash && <SplashScreen />}
+      
+      <div className={`relative w-full sm:min-w-96 sm:w-96 h-full bg-white overflow-hidden transition-opacity duration-1000 ${showSplash ? 'opacity-0' : 'opacity-100'}`}>
         {/* Force Reset Button to clear data */}
         <div className="absolute top-36 -right-11 opacity-20 hover:opacity-100 z-50 flex items-center p-1 PL-0 gap-1 bg-zinc-50 border-2 border-r-0 border-gray-300 hover:-translate-x-11 rounded-l-md transition-all duration-300">
           <ChevronLeft />

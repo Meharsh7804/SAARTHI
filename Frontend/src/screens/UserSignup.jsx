@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
+import logo from "/saarthi.png";
 import { Button, Heading, Input } from "../components";
 import { useUser } from "../contexts/UserContext";
 import axios from "axios";
@@ -63,6 +64,11 @@ function UserSignup() {
   return (
     <div className="w-full h-dvh flex flex-col justify-between p-4 pt-6">
       <div>
+        <img
+          className="h-12 object-contain mb-6"
+          src={logo}
+          alt="Logo"
+        />
         <Heading title={"User Sign Up🧑🏻"} />
         <form onSubmit={handleSubmit(signupUser)}>
           <div className="flex gap-4 -mb-2">

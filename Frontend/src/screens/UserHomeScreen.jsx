@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useUser } from "../contexts/UserContext";
 import map from "/map.png";
+import logo from "/saarthi.png";
 import {
   Button,
   LocationSuggestions,
@@ -293,6 +294,11 @@ function UserHomeScreen() {
   return (
     <div className="relative w-full h-dvh bg-zinc-50 overflow-hidden">
       <Sidebar />
+      <img
+        className="h-12 object-contain absolute left-5 top-5 z-10"
+        src={logo}
+        alt="Logo"
+      />
       
       {/* Map Section */}
       <div className="absolute top-0 left-0 w-full h-[70vh] z-0">
