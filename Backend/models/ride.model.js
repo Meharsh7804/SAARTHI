@@ -29,7 +29,7 @@ const rideSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "accepted", "ongoing", "completed", "cancelled"],
+      enum: ["pending", "accepted", "arrived", "ongoing", "completed", "cancelled"],
       default: "pending",
     },
     duration: {
@@ -67,6 +67,19 @@ const rideSchema = new mongoose.Schema(
         _id: false
       },
     ],
+    selectedRouteType: {
+      type: String,
+      enum: ["fastest", "safest"],
+      default: "fastest",
+    },
+    driverLocation: {
+      ltd: {
+        type: Number,
+      },
+      lng: {
+        type: Number,
+      },
+    },
   },
   { timestamps: true }
 );

@@ -6,9 +6,12 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import Console from "../utils/console";
 
-function Sidebar() {
+function Sidebar({ showSidebar: externalShowSidebar, setShowSidebar: externalSetShowSidebar }) {
+  const [internalShowSidebar, setInternalShowSidebar] = useState(false);
+  const showSidebar = externalShowSidebar !== undefined ? externalShowSidebar : internalShowSidebar;
+  const setShowSidebar = externalSetShowSidebar || setInternalShowSidebar;
+
   const token = localStorage.getItem("token");
-  const [showSidebar, setShowSidebar] = useState(false);
 
   const [newUser, setNewUser] = useState({});
 
@@ -45,7 +48,7 @@ function Sidebar() {
   return (
     <>
       <div
-        className="m-3 mt-4 absolute right-0 top-0 z-20 cursor-pointer bg-white p-1 rounded"
+        className="m-3 mt-4 absolute right-0 top-0 z-50 cursor-pointer bg-white p-1 rounded"
         onClick={() => {
           setShowSidebar(!showSidebar);
         }}
@@ -56,7 +59,7 @@ function Sidebar() {
       {/* Sidebar Component */}
       <div
         className={`${showSidebar ? " left-0 " : " -left-[100%] "
-          } z-10 duration-300 absolute w-full h-dvh bottom-0 bg-white p-4 pt-5 flex flex-col justify-between`}
+          } z-40 duration-300 absolute w-full h-dvh bottom-0 bg-white p-4 pt-5 flex flex-col justify-between`}
       >
         <div className="select-none">
           <h1 className="relative text-2xl font-semibold ">Profile</h1>

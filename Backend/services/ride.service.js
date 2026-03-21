@@ -138,11 +138,12 @@ module.exports.createRide = async ({
       user,
       pickup,
       destination,
-      otp: getOtp(6),
+      otp: getOtp(4),
       fare: fare[vehicleType],
       vehicle: vehicleType,
       distance: distanceValue,
       duration: durationValue,
+      selectedRouteType: selectedRouteMode,
     });
 
     return ride;
@@ -193,6 +194,41 @@ module.exports.confirmRide = async ({ rideId, captain }) => {
   }
 };
 
+module.exports.arrivedRide = async ({ rideId, captain }) => {
+    if (!rideId) {
+        throw new Error("Ride id is required");
+    }
+
+    const ride = await rideModel.findOne({
+        _id: rideId,
+    }).populate("user").populate("captain");
+
+    if (!ride) {
+        throw new Error("Ride not found");
+    }
+
+    if (ride.captain._id.toString() !== captain._id.toString()) {
+        console.log(`Captain mismatch: Ride captain is ${ride.captain._id}, requesting captain is ${captain._id}`);
+        throw new Error("You are not the captain for this ride");
+    }
+
+    if (ride.status !== "accepted") {
+        console.log(`Arrived Ride Error: Status is ${ride.status}, expected accepted. Ride ID: ${rideId}`);
+        throw new Error(`Ride status is ${ride.status}, expected accepted`);
+    }
+
+    await rideModel.findOneAndUpdate(
+        {
+            _id: rideId,
+        },
+        {
+            status: "arrived",
+        }
+    );
+
+    return ride;
+};
+
 module.exports.startRide = async ({ rideId, otp, captain }) => {
   if (!rideId || !otp) {
     throw new Error("Ride id and OTP are required");
@@ -210,8 +246,8 @@ module.exports.startRide = async ({ rideId, otp, captain }) => {
     throw new Error("Ride not found");
   }
 
-  if (ride.status !== "accepted") {
-    throw new Error("Ride not accepted");
+  if (ride.status !== "accepted" && ride.status !== "arrived") {
+    throw new Error("Ride not accepted or arrived");
   }
 
   if (ride.otp !== otp) {

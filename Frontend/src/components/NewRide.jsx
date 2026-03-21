@@ -17,6 +17,7 @@ function NewRide({
   showPreviousPanel,
   loading,
   acceptRide,
+  arrivedRide,
   endRide,
   verifyOTP,
   error,
@@ -165,14 +166,25 @@ function NewRide({
               />
               <Button title={"Accept"} fun={acceptRide} loading={loading} />
             </div>
+          ) : showBtn == "arrive" ? (
+            <Button
+              title={"I Have Arrived"}
+              loading={loading}
+              fun={arrivedRide}
+              classes={"bg-yellow-500 "}
+            />
           ) : showBtn == "otp" ? (
             <>
               <input
                 type="number"
-                minLength={6}
-                maxLength={6}
+                minLength={4}
+                maxLength={4}
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value.length <= 4) {
+                    setOtp(e.target.value);
+                  }
+                }}
                 placeholder={"Enter OTP"}
                 className="w-full bg-zinc-100 px-4 py-3 rounded-lg outline-none text-sm mb-2"
               />

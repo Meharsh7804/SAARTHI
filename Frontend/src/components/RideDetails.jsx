@@ -21,6 +21,7 @@ function RideDetails({
   loading,
   rideCreated,
   confirmedRideData,
+  rideStatus,
 }) {
   if (!showPanel) return null;
 
@@ -48,6 +49,16 @@ function RideDetails({
                 <div className="h-1 rounded-full bg-blue-500 animate-ping"></div>
               </div>
             </>
+          )}
+          {rideStatus === "arrived" && (
+            <div className="bg-yellow-100 p-3 rounded-lg mb-4 border-2 border-yellow-200">
+                <h1 className="text-sm font-semibold text-yellow-800 text-center">Your captain has arrived. Please share OTP to start ride.</h1>
+            </div>
+          )}
+          {rideStatus === "accepted" && (
+            <div className="bg-blue-50 p-3 rounded-lg mb-4 border-2 border-blue-100">
+                <h1 className="text-sm font-semibold text-blue-800 text-center">Captain is arriving 🚗</h1>
+            </div>
           )}
           <div
             className={`flex ${

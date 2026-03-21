@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import map from "/map.png";
 import logo from "/saarthi.png";
 import axios from "axios";
@@ -73,6 +73,10 @@ function CaptainHomeScreen() {
   const [showBtn, setShowBtn] = useState(
     JSON.parse(localStorage.getItem("showBtn")) || "accept"
   );
+  const showBtnRef = useRef(showBtn);
+  useEffect(() => {
+    showBtnRef.current = showBtn;
+  }, [showBtn]);
 
   const acceptRide = async () => {
     try {
@@ -88,7 +92,8 @@ function CaptainHomeScreen() {
           }
         );
         setLoading(false);
-        setShowBtn("otp");
+        setShowBtn("arrive"); // New state to show "I Have Arrived" button
+        // Route from Driver Current Location to Pickup
         setMapLocation(
           `https://www.google.com/maps?q=${riderLocation.ltd},${riderLocation.lng} to ${newRide.pickup}&output=embed`
         );
@@ -104,9 +109,33 @@ function CaptainHomeScreen() {
     }
   };
 
+  const arrivedRide = async () => {
+    try {
+      if (newRide._id != "") {
+        setLoading(true);
+        await axios.post(
+          `${import.meta.env.VITE_SERVER_URL}/ride/arrived`,
+          { rideId: newRide._id },
+          {
+            headers: {
+              token: token,
+            },
+          }
+        );
+        setLoading(false);
+        setShowBtn("otp");
+      }
+    } catch (error) {
+      setLoading(false);
+      const message = error.response?.data?.message || error.message || 'Failed to update status';
+      showAlert('Error', message, 'failure');
+      Console.log("Arrival Error Details:", error.response?.data || error);
+    }
+  };
+
   const verifyOTP = async () => {
     try {
-      if (newRide._id != "" && otp.length == 6) {
+      if (newRide._id != "" && otp.length == 4) {
         setLoading(true);
         const response = await axios.get(
           `${import.meta.env.VITE_SERVER_URL}/ride/start-ride?rideId=${newRide._id}&otp=${otp}`,
@@ -117,7 +146,7 @@ function CaptainHomeScreen() {
           }
         );
         setMapLocation(
-          `https://www.google.com/maps?q=${riderLocation.ltd},${riderLocation.lng} to ${newRide.destination}&output=embed`
+          `https://www.google.com/maps?q=${newRide.pickup} to ${newRide.destination}&output=embed`
         );
         setShowBtn("end-ride");
         setLoading(false);
@@ -172,9 +201,13 @@ function CaptainHomeScreen() {
             lng: position.coords.longitude,
           });
 
-          setMapLocation(
-            `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}&output=embed`
-          );
+          // Only update mapLocation if no active ride or if we are not navigating
+          if (showBtnRef.current === "accept") {
+            setMapLocation(
+              `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}&output=embed`
+            );
+          }
+
           socket.emit("update-location-captain", {
             userId: captain._id,
             location: {
@@ -450,6 +483,7 @@ function CaptainHomeScreen() {
         showPreviousPanel={setShowCaptainDetailsPanel}
         loading={loading}
         acceptRide={acceptRide}
+        arrivedRide={arrivedRide}
         verifyOTP={verifyOTP}
         endRide={endRide}
         error={error}

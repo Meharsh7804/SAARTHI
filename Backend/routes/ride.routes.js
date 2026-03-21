@@ -21,6 +21,12 @@ router.get('/get-fare',
     rideController.getFare
 )
 
+router.post('/arrived',
+    authMiddleware.authCaptain,
+    body('rideId').isMongoId().withMessage('Invalid ride id'),
+    rideController.arrivedRide
+)
+
 router.post('/confirm',
     authMiddleware.authCaptain,
     body('rideId').isMongoId().withMessage('Invalid ride id'),
@@ -37,7 +43,7 @@ router.get('/cancel',
 router.get('/start-ride',
     authMiddleware.authCaptain,
     query('rideId').isMongoId().withMessage('Invalid ride id'),
-    query('otp').isString().isLength({ min: 6, max: 6 }).withMessage('Invalid OTP'),
+    query('otp').isString().isLength({ min: 4, max: 4 }).withMessage('Invalid OTP'),
     rideController.startRide
 )
 

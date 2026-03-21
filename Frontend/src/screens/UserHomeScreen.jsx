@@ -40,6 +40,7 @@ function UserHomeScreen() {
     bike: 0,
   });
   const [confirmedRideData, setConfirmedRideData] = useState(null);
+  const [rideStatus, setRideStatus] = useState("pending");
   const rideTimeout = useRef(null);
 
   // Fastest/Safest selections
@@ -207,9 +208,16 @@ function UserHomeScreen() {
       clearTimeout(rideTimeout.current);
       setMapLocation(`https://www.google.com/maps?q=${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]} to ${pickupLocation}&output=embed`);
       setConfirmedRideData(data);
+      setRideStatus("accepted");
+    });
+
+    socket.on("ride-arrived", (data) => {
+        setRideStatus("arrived");
+        setMapLocation(`https://www.google.com/maps?q=${data.pickup}&output=embed`);
     });
 
     socket.on("ride-started", (data) => {
+      setRideStatus("ongoing");
       setMapLocation(`https://www.google.com/maps?q=${data.pickup} to ${data.destination}&output=embed`);
     });
 
@@ -232,6 +240,7 @@ function UserHomeScreen() {
 
     return () => {
       socket.off("ride-confirmed");
+      socket.off("ride-arrived");
       socket.off("ride-started");
       socket.off("ride-ended");
       socket.off("captain-location-updated");
@@ -416,6 +425,7 @@ function UserHomeScreen() {
                   loading={loading}
                   rideCreated={rideCreated}
                   confirmedRideData={confirmedRideData}
+                  rideStatus={rideStatus}
                 />
             </div>
         )}
