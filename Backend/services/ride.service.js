@@ -85,6 +85,10 @@ module.exports.getFareWithRoutes = async (pickup, destination) => {
         };
     });
 
+    if (!processedRoutes || processedRoutes.length === 0) {
+        throw new Error("No routes found between these locations. Try being more specific.");
+    }
+
     // Find Fastest
     const fastest = processedRoutes.reduce((prev, curr) =>
         prev.duration.value < curr.duration.value ? prev : curr
@@ -121,7 +125,8 @@ module.exports.createRide = async ({
   pickup,
   destination,
   vehicleType,
-  selectedRouteMode = 'fastest'
+  selectedRouteMode = 'fastest',
+  genderPreference = 'any'
 }) => {
   if (!user || !pickup || !destination || !vehicleType) {
     throw new Error("All fields are required");
@@ -144,6 +149,7 @@ module.exports.createRide = async ({
       distance: distanceValue,
       duration: durationValue,
       selectedRouteType: selectedRouteMode,
+      genderPreference: genderPreference || 'any'
     });
 
     return ride;

@@ -29,9 +29,11 @@ const vehicles = [
 
 function SelectVehicle({
   selectedVehicle,
+  setSelectedVehicle,
   fare,
   setShowPanel,
   showNextPanel,
+  rideMode
 }) {
   return (
     <div className="w-full flex flex-col gap-2">
@@ -41,8 +43,10 @@ function SelectVehicle({
           vehicle={vehicle}
           fare={fare}
           selectedVehicle={selectedVehicle}
+          setSelectedVehicle={setSelectedVehicle}
           setShowPanel={setShowPanel}
           showNextPanel={showNextPanel}
+          rideMode={rideMode}
         />
       ))}
     </div>
@@ -52,18 +56,22 @@ function SelectVehicle({
 const Vehicle = ({
   vehicle,
   selectedVehicle,
+  setSelectedVehicle,
   fare,
   setShowPanel,
   showNextPanel,
+  rideMode
 }) => {
   return (
     <div
       onClick={() => {
-        selectedVehicle(vehicle.type);
+        setSelectedVehicle(vehicle.type);
         setShowPanel(false);
         showNextPanel(true);
       }}
-      className="cursor-pointer my-1 flex items-center w-full  rounded-xl border-[3px] transition-all duration-150 border-zinc-100 bg-zinc-50 hover:border-black overflow-hidden"
+      className={`cursor-pointer my-1 flex items-center w-full rounded-xl border-[3px] transition-all duration-150 border-zinc-100 bg-zinc-50 overflow-hidden ${
+        rideMode === "female-only" ? "hover:border-pink-500" : "hover:border-black"
+      }`}
     >
       <div className="py-4">
         <img

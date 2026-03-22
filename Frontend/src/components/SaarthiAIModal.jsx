@@ -107,23 +107,25 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading, suggesti
               )}
             </div>
 
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg">
-                <Clock size={16} className="text-zinc-600" />
+            <div>
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block ml-1">
+                Desired Arrival Time
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg pointer-events-none">
+                  <Clock size={16} className="text-zinc-600" />
+                </div>
+                <input
+                  type="time"
+                  value={arrivalTime}
+                  onChange={(e) => {
+                    setArrivalTime(e.target.value);
+                    setActiveField(null);
+                  }}
+                  className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium appearance-none"
+                  required
+                />
               </div>
-              <input
-                type="time"
-                value={arrivalTime}
-                onChange={(e) => {
-                  setArrivalTime(e.target.value);
-                  setActiveField(null);
-                }}
-                className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium"
-                required
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                Arrival Time
-              </span>
             </div>
 
             <div className="mt-4 pt-2">

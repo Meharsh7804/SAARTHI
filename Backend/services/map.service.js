@@ -90,9 +90,11 @@ module.exports.getDetailedRoutes = async (origin, destination) => {
         const response = await axios.get(url);
         if (response.data.status === "OK") {
             return response.data.routes;
+        } else if (response.data.status === "ZERO_RESULTS") {
+            throw new Error("No driving route found between these locations.");
         } else {
-            console.error(response.data.status, response.data.error_message);
-            throw new Error("Unable to fetch detailed routes");
+            console.error(response.data.status, response.data.error_message || "Google API failure");
+            throw new Error(`Maps Error: ${response.data.status}. ${response.data.error_message || ""}`);
         }
     } catch (err) {
         console.error(err);
@@ -114,7 +116,7 @@ module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType, us
       // status: "active",
     };
 
-    if (gender) {
+    if (gender && gender !== 'any') {
       query.gender = gender;
     }
 

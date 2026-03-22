@@ -80,6 +80,11 @@ const rideSchema = new mongoose.Schema(
         type: Number,
       },
     },
+    genderPreference: {
+      type: String,
+      enum: ["female", "any"],
+      default: "any",
+    },
   },
   { timestamps: true }
 );

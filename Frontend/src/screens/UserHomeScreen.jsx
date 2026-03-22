@@ -89,6 +89,28 @@ function UserHomeScreen() {
     []
   );
 
+  // Fix for React stale closures in socket events
+  const pickupLocationRef = useRef("");
+  const destinationLocationRef = useRef("");
+  const confirmedRideDataRef = useRef(null);
+  const rideStatusRef = useRef("pending");
+
+  useEffect(() => {
+    pickupLocationRef.current = pickupLocation;
+  }, [pickupLocation]);
+
+  useEffect(() => {
+    destinationLocationRef.current = destinationLocation;
+  }, [destinationLocation]);
+
+  useEffect(() => {
+    confirmedRideDataRef.current = confirmedRideData;
+  }, [confirmedRideData]);
+
+  useEffect(() => {
+    rideStatusRef.current = rideStatus;
+  }, [rideStatus]);
+
   const onChangeHandler = (e) => {
     setSelectedInput(e.target.id);
     const value = e.target.value;
@@ -103,12 +125,12 @@ function UserHomeScreen() {
     }
   };
 
-  const getDistanceAndFare = async (pickupLocation, destinationLocation) => {
+  const getDistanceAndFare = async (pickup, destination) => {
     try {
       setLoading(true);
       setTimeoutMessage("");
       const response = await axios.get(
-        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${pickupLocation}&destination=${destinationLocation}`,
+        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(destination)}`,
         { headers: { token: token } }
       );
       
@@ -132,11 +154,22 @@ function UserHomeScreen() {
       setLocationSuggestion([]);
       setLoading(false);
     } catch (error) {
-      Console.error(error);
+      console.error("Route Search Error:", error.response?.data || error.message);
       setLoading(false);
-      alert("Failed to find routes. Please try again.");
+      alert(error.response?.data?.message || "Failed to find routes. Please try again.");
     }
   };
+
+  // Auto-clear timeout messages after 5 seconds
+  useEffect(() => {
+    let timer;
+    if (timeoutMessage) {
+      timer = setTimeout(() => {
+        setTimeoutMessage("");
+      }, 5000);
+    }
+    return () => clearTimeout(timer);
+  }, [timeoutMessage]);
 
   const handleRouteModeChange = (mode) => {
     if (routesData && routesData[mode]) {
@@ -237,6 +270,7 @@ function UserHomeScreen() {
     setSelectedVehicle("car");
     setFare({ auto: 0, car: 0, bike: 0 });
     setConfirmedRideData(null);
+    setRideStatus("pending");
     setRideCreated(false);
     setRoutesData(null);
   };
@@ -263,10 +297,12 @@ function UserHomeScreen() {
 
     socket.on("ride-confirmed", (data) => {
       clearTimeout(rideTimeout.current);
-      const origin = `${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]}`;
-      const destination = encodeURIComponent(pickupLocation);
-      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
-      setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
+      if (data?.captain?.location) {
+        const origin = `${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]}`;
+        const destination = encodeURIComponent(data.pickup || pickupLocationRef.current);
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
+        setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
+      }
       setRoutesData(null); // Switch from trip overview to live tracking (iframe)
       setConfirmedRideData(data);
       setRideStatus("accepted");
@@ -274,21 +310,30 @@ function UserHomeScreen() {
 
     socket.on("ride-arrived", (data) => {
         setRideStatus("arrived");
-        setMapLocation(`https://www.google.com/maps?q=${encodeURIComponent(data.pickup)}&output=embed`);
+        setMapLocation(`https://www.google.com/maps?q=${encodeURIComponent(data.pickup || pickupLocationRef.current)}&output=embed`);
     });
 
     socket.on("ride-started", (data) => {
       setRideStatus("ongoing");
-      const origin = encodeURIComponent(data.pickup);
-      const destination = encodeURIComponent(data.destination);
+      const origin = encodeURIComponent(data.pickup || pickupLocationRef.current);
+      const destination = encodeURIComponent(data.destination || destinationLocationRef.current);
       const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
       setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
     });
 
     socket.on("captain-location-updated", (data) => {
-      if (confirmedRideData) {
+      const currentRideData = confirmedRideDataRef.current;
+      const currentStatus = rideStatusRef.current;
+
+      if (currentRideData) {
         const origin = `${data.location.ltd},${data.location.lng}`;
-        const destination = encodeURIComponent(pickupLocation);
+        // If ride is ongoing, destination is the USER'S destination
+        // Otherwise (accepted/arrived), destination is the PICKUP point for the captain to reach
+        const targetLocation = currentStatus === "ongoing"
+          ? (currentRideData.destination || destinationLocationRef.current)
+          : (currentRideData.pickup || pickupLocationRef.current);
+
+        const destination = encodeURIComponent(targetLocation);
         const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
         setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
       }
@@ -345,31 +390,41 @@ function UserHomeScreen() {
   const handleAutoBookingTrigger = async (task) => {
     try {
       setLoading(true);
-      setAutoBookingMessage("Saarthi AI is fetching current route details...");
+      setAutoBookingMessage("Saarthi AI is initiating your scheduled ride...");
       
-      const response = await axios.get(
-        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${task.pickup}&destination=${task.destination}`,
-        { headers: { token: token } }
-      );
-      
-      if (!response.data || !response.data.fastest) {
-        throw new Error("Unable to fetch routes for auto-booking");
-      }
-
-      setRoutesData(response.data);
-      setFare(response.data.fastest.fare);
+      // Step 1: Set locations so subsequent manual-flow functions use them
       setPickupLocation(task.pickup);
       setDestinationLocation(task.destination);
       
-      setAutoBookingMessage("Saarthi AI is contacting captains...");
+      // Step 2: Fetch routes and fares (Identical to clicking 'Search')
+      setAutoBookingMessage("Saarthi AI is calculating the safest/fastest routes...");
+      const fareResponse = await axios.get(
+        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${encodeURIComponent(task.pickup)}&destination=${encodeURIComponent(task.destination)}`,
+        { headers: { token: token } }
+      );
+      
+      if (!fareResponse.data || !fareResponse.data.fastest) {
+        throw new Error("Unable to fetch routes for auto-booking");
+      }
+
+      setRoutesData(fareResponse.data);
+      setFare(fareResponse.data.fastest.fare);
+      setSelectedRouteMode('fastest');
+      
+      // Step 3: Select Vehicle (AI prefers Car for reliability)
+      setSelectedVehicle("car");
+      
+      // Step 4: Create the ride (Identical to clicking 'Confirm Ride')
+      setAutoBookingMessage("Saarthi AI is now contacting captains for your arrival...");
       
       const createResponse = await axios.post(
         `${import.meta.env.VITE_SERVER_URL}/ride/create`,
         {
           pickup: task.pickup,
           destination: task.destination,
-          vehicleType: "car", // Default car for SaaS auto-book
+          vehicleType: "car",
           selectedRouteMode: "fastest",
+          genderPreference: rideMode === "female-only" ? "female" : "any",
         },
         { headers: { token: token } }
       );
@@ -378,7 +433,7 @@ function UserHomeScreen() {
         pickup: task.pickup,
         destination: task.destination,
         vehicleType: "car",
-        fare: response.data.fastest.fare,
+        fare: fareResponse.data.fastest.fare.car,
         confirmedRideData: null,
         _id: createResponse.data._id,
       };
@@ -386,25 +441,27 @@ function UserHomeScreen() {
       localStorage.setItem("rideDetails", JSON.stringify(rideData));
       setRideId(createResponse.data._id);
       
+      // Visual transitions
       setShowFindTripPanel(false);
+      setShowSelectVehiclePanel(false);
       setShowRideDetailsPanel(true);
       setRideCreated(true);
       setLoading(false);
       
-      // Clear message after success
+      // Clear AI status message
       setTimeout(() => setAutoBookingMessage(""), 5000);
 
-      // Start timeout for no captains
+      // Start longer timeout for no captains
       rideTimeout.current = setTimeout(() => {
         cancelRide();
-        setTimeoutMessage("No riders are currently available for your scheduled ride. Please try manually.");
-      }, 30000);
+        setTimeoutMessage("Saarthi AI: No captains available for your scheduled ride. Please try manually.");
+      }, 60000); // Increased to 1 minute for better reliability
 
     } catch (error) {
-      Console.error("Auto-booking failed:", error);
+      Console.error("Agentic AI Workflow failed:", error);
       setLoading(false);
       setAutoBookingMessage("");
-      alert("Saarthi AI was unable to book your scheduled ride. Please check your connection or locations.");
+      alert("Saarthi AI was unable to book your ride. Please check your connection.");
     }
   };
 
@@ -506,10 +563,12 @@ function UserHomeScreen() {
       {/* Floating Saarthi AI Button */}
       <button 
         onClick={() => setShowSaarthiModal(true)}
-        className="absolute right-4 top-16 z-[60] p-3 bg-white border border-zinc-100 shadow-xl rounded-full hover:scale-110 active:scale-95 transition-all duration-300 group"
+        className={`absolute right-4 top-16 z-[60] p-3 bg-white border border-zinc-100 shadow-xl rounded-full hover:scale-110 active:scale-95 transition-all duration-300 group ${
+          rideMode === "female-only" ? "ring-2 ring-pink-400/50 shadow-pink-100" : ""
+        }`}
         title="Use Saarthi AI"
       >
-        <Sparkles size={24} className="text-blue-600 transition-colors group-hover:text-blue-500" />
+        <Sparkles size={24} className={`${rideMode === "female-only" ? "text-pink-600" : "text-blue-600"} transition-colors group-hover:opacity-80`} />
       </button>
 
       {/* Floating AI Suggestions Popup */}
@@ -528,7 +587,7 @@ function UserHomeScreen() {
       )}
       
       {/* Map Section */}
-      <div className="absolute top-0 left-0 w-full h-[70vh] z-0">
+      <div className="absolute top-0 left-0 w-full h-full z-0">
         {routesData ? (
           <MapComponent 
             routesData={routesData} 
@@ -547,28 +606,44 @@ function UserHomeScreen() {
       </div>
 
       {/* Main Panel */}
-      <div className={`absolute bottom-0 w-full bg-white rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.1)] z-10 transition-all duration-500 max-h-[90vh] flex flex-col overflow-hidden`}>
+      <div className={`absolute bottom-0 w-full rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.1)] z-10 transition-all duration-500 max-h-[90vh] flex flex-col overflow-hidden ${
+        rideMode === "female-only" 
+          ? "bg-pink-50/95 border-t-2 border-pink-200" 
+          : "bg-white"
+      }`}>
         
         {/* Step 1: Find a trip */}
         {showFindTripPanel && (
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h1 className="text-2xl font-bold">Find a trip</h1>
-              {user.gender === "female" && (
-                <div className="flex items-center gap-2">
+          <>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-black">Find a trip</h1>
+                <div className="flex items-center gap-3">
                   <span className="text-xs font-semibold text-zinc-500">Female Only</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={rideMode === "female-only"}
-                      onChange={() => setRideMode(prev => prev === "normal" ? "female-only" : "normal")}
-                    />
-                    <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
-                  </label>
+                  <button 
+                    onClick={() => setRideMode(prev => prev === "normal" ? "female-only" : "normal")}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${
+                      rideMode === "female-only" ? "bg-pink-500" : "bg-zinc-200"
+                    }`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${
+                      rideMode === "female-only" ? "translate-x-6" : ""
+                    }`} />
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+
+            {rideMode === "female-only" && (
+              <div className="flex items-center gap-2 mb-4 bg-pink-100/50 p-2 rounded-lg border border-pink-200">
+                <div className="w-8 h-8 rounded-full bg-pink-500 flex items-center justify-center">
+                  <Sparkles size={16} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-pink-700">Saarthi Safe Mode Active</p>
+                  <p className="text-[10px] text-pink-600">Exclusive Female Captains & Extra Monitoring</p>
+                </div>
+              </div>
+            )}
             {timeoutMessage && (
               <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm mb-4 border border-red-100">
                 {timeoutMessage}
@@ -624,18 +699,20 @@ function UserHomeScreen() {
                     />
                 </div>
             </div>
+            </div> {/* Closing the p-6 div here */}
 
             {pickupLocation.length > 2 && destinationLocation.length > 2 && (
-              <div className="mt-4">
+              <div className="mt-4 px-6"> {/* Added px-6 here to maintain padding */}
                 <Button
                     title={"Search"}
                     loading={loading}
+                    classes={rideMode === "female-only" ? "bg-gradient-to-r from-pink-500 to-pink-600 border-none shadow-lg shadow-pink-200" : "bg-black"}
                     fun={() => getDistanceAndFare(pickupLocation, destinationLocation)}
                 />
             </div>
             )}
 
-            <div className="mt-4 max-h-[25vh] overflow-y-auto">
+            <div className="mt-4 max-h-[25vh] overflow-y-auto px-6"> {/* Added px-6 here to maintain padding */}
               {locationSuggestion.length > 0 && (
                 <LocationSuggestions
                   suggestions={locationSuggestion}
@@ -646,7 +723,7 @@ function UserHomeScreen() {
                 />
               )}
             </div>
-          </div>
+          </>
         )}
 
         {/* Step 2: Select Vehicle & Route */}
@@ -664,10 +741,12 @@ function UserHomeScreen() {
             />
             <div className="px-4 pb-4 overflow-y-auto">
                 <SelectVehicle
-                    selectedVehicle={setSelectedVehicle}
+                    selectedVehicle={selectedVehicle}
+                    setSelectedVehicle={setSelectedVehicle}
                     setShowPanel={setShowSelectVehiclePanel}
                     showNextPanel={setShowRideDetailsPanel}
                     fare={fare}
+                    rideMode={rideMode}
                 />
             </div>
           </>
@@ -677,19 +756,19 @@ function UserHomeScreen() {
         {showRideDetailsPanel && (
             <div className="overflow-y-auto">
                 <RideDetails
+                  showPanel={showRideDetailsPanel}
+                  setShowPanel={setShowRideDetailsPanel}
                   pickupLocation={pickupLocation}
                   destinationLocation={destinationLocation}
                   selectedVehicle={selectedVehicle}
                   fare={fare}
-                  showPanel={showRideDetailsPanel}
-                  setShowPanel={setShowRideDetailsPanel}
-                  showPreviousPanel={setShowSelectVehiclePanel}
                   createRide={createRide}
                   cancelRide={cancelRide}
                   loading={loading}
                   rideCreated={rideCreated}
                   confirmedRideData={confirmedRideData}
                   rideStatus={rideStatus}
+                  rideMode={rideMode}
                 />
                 {/* Old AI Suggestions placement removed to use floating version */}
             </div>

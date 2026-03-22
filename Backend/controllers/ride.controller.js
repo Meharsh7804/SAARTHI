@@ -87,7 +87,8 @@ module.exports.createRide = async (req, res) => {
       pickup,
       destination,
       vehicleType,
-      selectedRouteMode: selectedRouteMode || 'fastest'
+      selectedRouteMode: selectedRouteMode || 'fastest',
+      genderPreference: genderPreference || 'any'
     });
 
     const user = await userModel.findOne({ _id: req.user._id });
@@ -103,6 +104,7 @@ module.exports.createRide = async (req, res) => {
         const pickupCoordinates = await mapService.getAddressCoordinate(pickup);
         console.log("Pickup Coordinates", pickupCoordinates);
 
+        console.log(`Searching for ${vehicleType} captains within 4km of ${pickup}. Gender pref: ${genderPreference}`);
         const captainsInRadius = await mapService.getCaptainsInTheRadius(
           pickupCoordinates.ltd,
           pickupCoordinates.lng,
@@ -112,25 +114,23 @@ module.exports.createRide = async (req, res) => {
           genderPreference
         );
 
+        console.log(`Found ${captainsInRadius.length} captains for ride ${ride._id}`);
+
         ride.otp = "";
 
         const rideWithUser = await rideModel
           .findOne({ _id: ride._id })
           .populate("user");
 
-        console.log(
-          captainsInRadius.map(
-            (ride) => `${ride.fullname.firstname} ${ride.fullname.lastname} `
-          )
-        );
         captainsInRadius.map((captain) => {
+          console.log(`Sending new-ride to captain: ${captain.fullname.firstname} (Socket: ${captain.socketId})`);
           sendMessageToSocketId(captain.socketId, {
             event: "new-ride",
             data: rideWithUser,
           });
         });
       } catch (e) {
-        console.error("Background task failed:", e.message);
+        console.error("Background ride notification failed:", e);
       }
     });
   } catch (err) {

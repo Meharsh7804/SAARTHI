@@ -5,7 +5,8 @@ import {
   PhoneCall,
   SendHorizontal,
   ArrowLeft,
-  Share2
+  Share2,
+  Sparkles
 } from "lucide-react";
 import Button from "./Button";
 
@@ -23,11 +24,14 @@ function RideDetails({
   rideCreated,
   confirmedRideData,
   rideStatus,
+  rideMode
 }) {
   if (!showPanel) return null;
 
   return (
-    <div className="w-full bg-white flex flex-col">
+    <div className={`w-full flex flex-col transition-colors duration-500 ${
+      rideMode === "female-only" ? "bg-pink-50/50" : "bg-white"
+    }`}>
       {!rideCreated && (
         <div className="flex items-center px-4 py-3 border-b mb-2">
             <button 
@@ -35,31 +39,48 @@ function RideDetails({
                     setShowPanel(false);
                     showPreviousPanel(true);
                 }}
-                className="p-2 hover:bg-zinc-100 rounded-full transition-colors mr-2"
+                className={`p-2 rounded-full transition-colors mr-2 ${
+                  rideMode === "female-only" ? "hover:bg-pink-100 text-pink-600" : "hover:bg-zinc-100"
+                }`}
             >
                 <ArrowLeft size={20} />
             </button>
-            <h2 className="text-lg font-bold">Confirm your ride</h2>
+            <h2 className={`text-lg font-bold ${rideMode === "female-only" ? "text-pink-900" : ""}`}>Confirm your ride</h2>
         </div>
       )}
       <div className="px-4 pb-4">
           {rideCreated && !confirmedRideData && (
-            <>
-              <h1 className="text-center">Looking for nearby drivers</h1>
-              <div className="overflow-y-hidden py-2 pb-2">
-                <div className="h-1 rounded-full bg-blue-500 animate-ping"></div>
+            <div className="flex flex-col items-center py-4">
+              <h1 className={`text-center font-bold mb-2 animate-pulse ${rideMode === "female-only" ? "text-pink-600" : "text-blue-600"}`}>
+                {rideMode === "female-only" ? "Saarthi Safe Mode: Finding Female Captain..." : "Looking for nearby drivers"}
+              </h1>
+              <div className="w-full h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+                <div className={`h-full animate-progress ${
+                  rideMode === "female-only" ? "bg-pink-500" : "bg-blue-500"
+                }`} style={{ width: '40%' }}></div>
               </div>
-            </>
+            </div>
           )}
           {rideStatus === "arrived" && (
-            <div className="bg-yellow-100 p-3 rounded-lg mb-4 border-2 border-yellow-200">
-                <h1 className="text-sm font-semibold text-yellow-800 text-center">Your captain has arrived. Please share OTP to start ride.</h1>
+            <div className={`p-3 rounded-lg mb-4 border-2 animate-bounce shadow-sm ${
+              rideMode === "female-only" ? "bg-pink-100 border-pink-200 text-pink-800" : "bg-yellow-100 border-yellow-200 text-yellow-800"
+            }`}>
+                <h1 className="text-sm font-bold text-center">Your captain has arrived. Please share OTP to start ride.</h1>
             </div>
           )}
           {rideStatus === "accepted" && (
-            <div className="bg-blue-50 p-3 rounded-lg mb-4 border-2 border-blue-100">
-                <h1 className="text-sm font-semibold text-blue-800 text-center">Captain is arriving 🚗</h1>
+            <div className={`p-3 rounded-lg mb-4 border-2 shadow-sm ${
+              rideMode === "female-only" ? "bg-pink-50 border-pink-200 text-pink-700" : "bg-blue-50 border-blue-100 text-blue-800"
+            }`}>
+                <h1 className="text-sm font-bold text-center">Captain is arriving 🚗</h1>
             </div>
+          )}
+
+          {rideMode === "female-only" && (
+              <div className="flex items-center gap-2 mb-4 bg-pink-500/10 p-2 rounded-lg border border-pink-200/50">
+                  <Sparkles size={16} className="text-pink-500" />
+                  <p className="text-[10px] font-bold text-pink-700 uppercase tracking-wider">Saarthi Safe Mode Active</p>
+              </div>
           )}
           <div
             className={`flex ${
@@ -126,8 +147,8 @@ function RideDetails({
           )}
           <div className="mb-2">
             {/* Pickup Location */}
-            <div className="flex items-center gap-3 border-t-2 py-2 px-2">
-              <MapPinMinus size={18} />
+            <div className={`flex items-center gap-3 border-t-2 py-2 px-2 ${rideMode === "female-only" ? "border-pink-100" : ""}`}>
+              <MapPinMinus size={18} className={rideMode === "female-only" ? "text-pink-500" : "text-zinc-400"} />
               <div>
                 <h1 className="text-lg font-semibold leading-5">
                   {pickupLocation.split(", ")[0]}
@@ -152,8 +173,8 @@ function RideDetails({
             </div>
 
             {/* Destination Location */}
-            <div className="flex items-center gap-3 border-t-2 py-2 px-2">
-              <MapPinPlus size={18} />
+            <div className={`flex items-center gap-3 border-t-2 py-2 px-2 ${rideMode === "female-only" ? "border-pink-100" : ""}`}>
+              <MapPinPlus size={18} className={rideMode === "female-only" ? "text-pink-500" : "text-zinc-600"} />
               <div>
                 <h1 className="text-lg font-semibold leading-5">
                   {destinationLocation.split(", ")[0]}
@@ -179,8 +200,8 @@ function RideDetails({
             </div>
 
             {/* Fare */}
-            <div className="flex items-center gap-3 border-t-2 py-2 px-2">
-              <CreditCard size={18} />
+            <div className={`flex items-center gap-3 border-t-2 py-2 px-2 ${rideMode === "female-only" ? "border-pink-100" : ""}`}>
+              <CreditCard size={18} className={rideMode === "female-only" ? "text-pink-500" : ""} />
               <div>
                 <h1 className="text-lg font-semibold leading-6">
                   ₹ {fare[selectedVehicle]}
@@ -193,7 +214,7 @@ function RideDetails({
             <div className="mb-2">
               <Button
                 title={"Share Tracking Link"}
-                classes={"bg-blue-600 text-white"}
+                classes={rideMode === "female-only" ? "bg-pink-100 text-pink-700 border border-pink-200" : "bg-blue-600 text-white"}
                 icon={<Share2 size={18} />}
                 fun={() => {
                   const link = `${window.location.origin}/track/${confirmedRideData._id}`;
@@ -215,11 +236,16 @@ function RideDetails({
             <Button
               title={"Cancel Ride"}
               loading={loading}
-              classes={"bg-red-600 "}
+              classes={"bg-red-600 shadow-md"}
               fun={cancelRide}
             />
           ) : (
-            <Button title={"Confirm Ride"} fun={createRide} loading={loading} />
+            <Button 
+                title={"Confirm Ride"} 
+                fun={createRide} 
+                loading={loading} 
+                classes={rideMode === "female-only" ? "bg-gradient-to-r from-pink-500 to-pink-600 border-none shadow-lg shadow-pink-200" : "bg-black"}
+            />
           )}
         </div>
       </div>
