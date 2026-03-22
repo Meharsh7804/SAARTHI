@@ -63,3 +63,12 @@ app.use("/feedback", feedbackRoutes);
 server.listen(PORT, () => {
   console.log("Server is listening on port", PORT);
 });
+
+// Prevent server crash on network hiccups (e.g. MongoDB disconnection)
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Promise Rejection:", err.message);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err.message);
+});
