@@ -19,8 +19,8 @@ let emailTemplate = `
     >
       <div style="display: flex; margin-bottom: 30px; gap: 20px">
         <img
-          src="https://quick-ride-asif.vercel.app/logo-quickride.png"
-          alt="QuickRide"
+          src="https://saarthi-ride.vercel.app/saarthi.png"
+          alt="Saarthi"
           style="margin: 0px auto; height: 60px"
         />
       </div>
@@ -59,7 +59,7 @@ let emailTemplate = `
           text-align: center;
         "
       >
-        &mdash; The QuickRide Team
+        &mdash; The Saarthi Team
         <br />
         <small>
           If you have any questions or need help, feel free to reach out to our
