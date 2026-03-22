@@ -31,6 +31,7 @@ function CaptainSignup() {
       email: data.email,
       password: data.password,
       phone: data.phone,
+      gender: data.gender,
       vehicle: {
         color: data.color,
         number: data.number,
@@ -106,13 +107,23 @@ function CaptainSignup() {
                 register={register}
                 error={errors.phone}
               />
-              <Input
-                label={"Email"}
-                type={"email"}
-                name={"email"}
-                register={register}
-                error={errors.email}
-              />
+              <div className="flex gap-4 -mb-2">
+                <Input
+                  label={"Email"}
+                  type={"email"}
+                  name={"email"}
+                  register={register}
+                  error={errors.email}
+                />
+                <Input
+                  label={"Gender"}
+                  type={"select"}
+                  options={["male", "female", "other", "prefer not to say"]}
+                  name={"gender"}
+                  register={register}
+                  error={errors.gender}
+                />
+              </div>
 
               <Input
                 label={"Password"}

@@ -100,11 +100,11 @@ module.exports.getDetailedRoutes = async (origin, destination) => {
     }
 };
 
-module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType, userId = null) => {
+module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType, userId = null, gender = null) => {
   // radius in km
   
   try {
-    const captains = await captainModel.find({
+    const query = {
       location: {
         $geoWithin: {
           $centerSphere: [[lng, ltd], radius / 6371],
@@ -112,7 +112,13 @@ module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType, us
       },
       "vehicle.type": vehicleType,
       // status: "active",
-    });
+    };
+
+    if (gender) {
+      query.gender = gender;
+    }
+
+    const captains = await captainModel.find(query);
 
     if (!userId) {
       return captains.sort((a, b) => (b.avgSafetyScore || 0) - (a.avgSafetyScore || 0));

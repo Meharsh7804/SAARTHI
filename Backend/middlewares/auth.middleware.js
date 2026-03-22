@@ -32,6 +32,7 @@ module.exports.authUser = async (req, res, next) => {
       phone: user.phone,
       rides: user.rides,
       socketId: user.socketId,
+      gender: user.gender,
       emailVerified: user.emailVerified || false,
     };
     req.userType = "user";
@@ -77,6 +78,7 @@ module.exports.authCaptain = async (req, res, next) => {
       rides: captain.rides,
       socketId: captain.socketId,
       emailVerified: captain.emailVerified,
+      gender: captain.gender,
       vehicle: captain.vehicle,
       status: captain.status,
     };

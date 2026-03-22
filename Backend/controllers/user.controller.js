@@ -12,7 +12,7 @@ module.exports.registerUser = asyncHandler(async (req, res) => {
     return res.status(400).json(errors.array());
   }
 
-  const { fullname, email, password, phone } = req.body;
+  const { fullname, email, password, phone, gender } = req.body;
 
   const alreadyExists = await userModel.findOne({ email });
 
@@ -25,7 +25,8 @@ module.exports.registerUser = asyncHandler(async (req, res) => {
     fullname.lastname,
     email,
     password,
-    phone
+    phone,
+    gender
   );
 
   const token = user.generateAuthToken();
@@ -103,6 +104,7 @@ module.exports.loginUser = asyncHandler(async (req, res) => {
       phone: user.phone,
       rides: user.rides,
       socketId: user.socketId,
+      gender: user.gender,
       emailVerified: user.emailVerified,
     },
   });
@@ -118,13 +120,14 @@ module.exports.updateUserProfile = asyncHandler(async (req, res) => {
     return res.status(400).json(errors.array());
   }
 
-  const { fullname,  phone } = req.body;
+  const { fullname, phone, gender } = req.body;
 
   const updatedUserData = await userModel.findOneAndUpdate(
     { _id: req.user._id },
     {
       fullname: fullname,
       phone,
+      gender,
     },
     { new: true }
   );

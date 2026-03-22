@@ -12,7 +12,7 @@ module.exports.registerCaptain = asyncHandler(async (req, res) => {
     return res.status(400).json(errors.array());
   }
 
-  const { fullname, email, password, phone, vehicle } = req.body;
+  const { fullname, email, password, phone, vehicle, gender } = req.body;
 
   const alreadyExists = await captainModel.findOne({ email });
 
@@ -29,7 +29,8 @@ module.exports.registerCaptain = asyncHandler(async (req, res) => {
     vehicle.color,
     vehicle.number,
     vehicle.capacity,
-    vehicle.type
+    vehicle.type,
+    gender
   );
 
   const token = captain.generateAuthToken();

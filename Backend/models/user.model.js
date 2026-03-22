@@ -32,6 +32,11 @@ const userSchema = new mongoose.Schema(
       minlength: 10,
       maxlength: 10,
     },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", "prefer not to say"],
+      required: true,
+    },
     socketId: {
       type: String,
     },

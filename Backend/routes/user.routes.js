@@ -9,6 +9,7 @@ router.post("/register",
     body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters long"),
     body("fullname.firstname").isLength({min:2}).withMessage("First name must be at least 2 characters long"),
     body("phone").isLength({min:10, max:10}).withMessage("Phone number should be of 10 digits only"),
+    body("gender").isIn(["male", "female", "other", "prefer not to say"]).withMessage("Invalid gender"),
     userController.registerUser
 );
 

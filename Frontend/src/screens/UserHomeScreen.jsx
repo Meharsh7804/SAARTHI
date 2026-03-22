@@ -30,6 +30,8 @@ function UserHomeScreen() {
   const [mapLocation, setMapLocation] = useState("");
   const [rideCreated, setRideCreated] = useState(false);
   const [rideId, setRideId] = useState("");
+  const [rideMode, setRideMode] = useState("normal");
+  const [timeoutMessage, setTimeoutMessage] = useState("");
 
   // Route & Fare details
   const [pickupLocation, setPickupLocation] = useState("");
@@ -90,6 +92,7 @@ function UserHomeScreen() {
   const getDistanceAndFare = async (pickupLocation, destinationLocation) => {
     try {
       setLoading(true);
+      setTimeoutMessage("");
       const response = await axios.get(
         `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${pickupLocation}&destination=${destinationLocation}`,
         { headers: { token: token } }
@@ -117,6 +120,9 @@ function UserHomeScreen() {
   const createRide = async () => {
     try {
       setLoading(true);
+      setTimeoutMessage(""); // Clear previous timeout message
+      if (rideTimeout.current) clearTimeout(rideTimeout.current);
+
       const response = await axios.post(
         `${import.meta.env.VITE_SERVER_URL}/ride/create`,
         {
@@ -124,6 +130,7 @@ function UserHomeScreen() {
           destination: destinationLocation,
           vehicleType: selectedVehicle,
           selectedRouteMode: selectedRouteMode,
+          genderPreference: rideMode === "female-only" ? "female" : null,
         },
         { headers: { token: token } }
       );
@@ -143,7 +150,8 @@ function UserHomeScreen() {
 
       rideTimeout.current = setTimeout(() => {
         cancelRide();
-      }, import.meta.env.VITE_RIDE_TIMEOUT);
+        setTimeoutMessage("No riders are currently available in your area. Please try after some time or change location.");
+      }, 20000); // 20 seconds
       
     } catch (error) {
       Console.log(error);
@@ -162,6 +170,7 @@ function UserHomeScreen() {
         `${import.meta.env.VITE_SERVER_URL}/ride/cancel?rideId=${rideDetails._id || rideDetails.confirmedRideData._id}`,
         { headers: { token: token } }
       );
+      if (rideTimeout.current) clearTimeout(rideTimeout.current);
       setLoading(false);
       updateLocation();
       setShowRideDetailsPanel(false);
@@ -308,7 +317,9 @@ function UserHomeScreen() {
   }, [confirmedRideData]);
 
   return (
-    <div className="relative w-full h-dvh bg-zinc-50 overflow-hidden">
+    <div className={`relative w-full h-dvh overflow-hidden transition-colors duration-500 ${
+      rideMode === "female-only" ? "bg-gradient-to-br from-pink-50 to-purple-100" : "bg-zinc-50"
+    }`}>
       <Sidebar />
       <img
         className="h-12 object-contain absolute left-5 top-5 z-10"
@@ -341,7 +352,28 @@ function UserHomeScreen() {
         {/* Step 1: Find a trip */}
         {showFindTripPanel && (
           <div className="p-6">
-            <h1 className="text-2xl font-bold mb-4">Find a trip</h1>
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-2xl font-bold">Find a trip</h1>
+              {user.gender === "female" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-zinc-500">Female Only</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={rideMode === "female-only"}
+                      onChange={() => setRideMode(prev => prev === "normal" ? "female-only" : "normal")}
+                    />
+                    <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
+                  </label>
+                </div>
+              )}
+            </div>
+            {timeoutMessage && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm mb-4 border border-red-100">
+                {timeoutMessage}
+              </div>
+            )}
             <div className="flex flex-col gap-3 relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-black/10 z-0"></div>
                 <div className="relative">
