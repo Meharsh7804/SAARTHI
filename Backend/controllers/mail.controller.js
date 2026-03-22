@@ -48,15 +48,15 @@ module.exports.sendVerificationEmail = asyncHandler(async (req, res) => {
     let mailHtml = fillTemplate({
       title: "Email Verification Required",
       name: user.fullname.firstname,
-      message: "Thank you for signing up with QuickRide! To complete your registration and activate your account, please verify your email address by clicking the button below.",
+      message: "Thank you for signing up with Saarthi! To complete your registration and activate your account, please verify your email address by clicking the button below.",
       cta_link: verification_link,
       cta_text: "Verify Email",
-      note: "For your security, this verification link is valid for only <strong>15 minutes</strong>.  If the link expires, you can request a new one from the login page. <br/>If you did not create a QuickRide account, please disregard this email.",
+      note: "For your security, this verification link is valid for only <strong>15 minutes</strong>.  If the link expires, you can request a new one from the login page. <br/>If you did not create a Saarthi account, please disregard this email.",
     });
 
     const result = await sendMail(
       user.email,
-      "QuickRide - Email Verification",
+      "Saarthi - Email Verification",
       mailHtml
     );
 
@@ -103,13 +103,13 @@ module.exports.forgotPassword = asyncHandler(async (req, res) => {
   let mailHtml = fillTemplate({
     title: "Reset Password",
     name: user.fullname.firstname,
-    message: "We received a request to reset the password associated with your QuickRide account. If you made this request, please click the button below to proceed.",
+    message: "We received a request to reset the password associated with your Saarthi account. If you made this request, please click the button below to proceed.",
     cta_link: resetLink,
     cta_text: "Reset Password",
     note: "If you didn’t request a password reset, you can safely ignore this email. Your current password will remain unchanged. <br/>This verification link is valid for <strong>15 minutes</strong> only.",
   });
 
-  await sendMail(user.email, "QuickRide - Reset Password", mailHtml);
+  await sendMail(user.email, "Saarthi - Reset Password", mailHtml);
 
   res.status(200).json({ message: "Reset password email sent successfully" });
 });

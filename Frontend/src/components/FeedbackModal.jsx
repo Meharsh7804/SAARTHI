@@ -121,7 +121,7 @@ const FeedbackModal = ({ isOpen, onClose, rideId, driverName }) => {
               <CheckCircle2 size={40} className="text-green-600 animate-in zoom-in-50 duration-300 delay-150" />
             </div>
             <h3 className="text-2xl font-bold text-zinc-900 mb-2">Thank You!</h3>
-            <p className="text-zinc-600">Your feedback helps us improve your QuickRide experience.</p>
+            <p className="text-zinc-600">Your feedback helps us improve your Saarthi experience.</p>
           </div>
         )}
       </div>
