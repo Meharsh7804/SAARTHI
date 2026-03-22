@@ -22,6 +22,7 @@ import ChatScreen from "./ChatScreen";
 import VerifyEmail from "./VerifyEmail";
 import ResetPassword from "./ResetPassword";
 import ForgotPassword from "./ForgotPassword";
+import TrackRideScreen from "./TrackRideScreen";
 
 export {
   GetStarted,
@@ -40,5 +41,6 @@ export {
   ChatScreen,
   VerifyEmail,
   ResetPassword,
-  ForgotPassword
+  ForgotPassword,
+  TrackRideScreen
 };

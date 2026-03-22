@@ -40,6 +40,39 @@ module.exports.chatDetails = async (req, res) => {
   }
 };
 
+module.exports.trackRide = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const ride = await rideModel
+      .findOne({ _id: id })
+      .populate("captain", "fullname vehicle location phone");
+      
+    if (!ride) {
+      return res.status(404).json({ message: "Ride not found" });
+    }
+
+    if (['completed', 'cancelled'].includes(ride.status)) {
+      return res.status(400).json({ message: "Ride tracking link has expired." });
+    }
+
+    const trackingData = {
+      _id: ride._id,
+      pickup: ride.pickup,
+      destination: ride.destination,
+      status: ride.status,
+      captain: ride.captain ? {
+        firstname: ride.captain.fullname.firstname,
+        vehicle: ride.captain.vehicle,
+        location: ride.captain.location,
+      } : null,
+    };
+
+    res.status(200).json(trackingData);
+  } catch (err) {
+    res.status(500).json({ message: "Invalid tracking link or server error" });
+  }
+};
+
 module.exports.createRide = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

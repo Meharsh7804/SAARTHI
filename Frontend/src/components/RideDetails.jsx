@@ -5,6 +5,7 @@ import {
   PhoneCall,
   SendHorizontal,
   ArrowLeft,
+  Share2
 } from "lucide-react";
 import Button from "./Button";
 
@@ -188,6 +189,28 @@ function RideDetails({
               </div>
             </div>
           </div>
+          {confirmedRideData?._id && (
+            <div className="mb-2">
+              <Button
+                title={"Share Tracking Link"}
+                classes={"bg-blue-600 text-white"}
+                icon={<Share2 size={18} />}
+                fun={() => {
+                  const link = `${window.location.origin}/track/${confirmedRideData._id}`;
+                  if (navigator.share) {
+                    navigator.share({
+                      title: 'Track My Ride',
+                      text: 'Follow my live ride location on SAARTHI! 🚗',
+                      url: link,
+                    }).catch(console.error);
+                  } else {
+                    navigator.clipboard.writeText(link);
+                    alert("Tracking link copied to clipboard: " + link);
+                  }
+                }}
+              />
+            </div>
+          )}
           {rideCreated || confirmedRideData ? (
             <Button
               title={"Cancel Ride"}

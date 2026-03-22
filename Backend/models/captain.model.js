@@ -82,6 +82,7 @@ const captainSchema = new mongoose.Schema(
       type: String,
       enum: ["male", "female", "other", "prefer not to say"],
       required: true,
+      default: "prefer not to say",
     },
     emailVerified: {
       type: Boolean,

@@ -16,7 +16,8 @@ import {
   ChatScreen,
   VerifyEmail,
   ResetPassword,
-  ForgotPassword
+  ForgotPassword,
+  TrackRideScreen
 } from "./screens/";
 import { SplashScreen } from "./components";
 import { logger } from "./utils/logger";
@@ -117,6 +118,7 @@ function App() {
             <Route path="/:userType/verify-email/" element={<VerifyEmail />} />
             <Route path="/:userType/forgot-password/" element={<ForgotPassword />} />
             <Route path="/:userType/reset-password/" element={<ResetPassword />} />
+            <Route path="/track/:id" element={<TrackRideScreen />} />
 
             <Route path="*" element={<Error />} />
           </Routes>

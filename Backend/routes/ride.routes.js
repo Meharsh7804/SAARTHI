@@ -6,6 +6,8 @@ const authMiddleware = require('../middlewares/auth.middleware');
 
 router.get('/chat-details/:id', rideController.chatDetails)
 
+router.get('/track/:id', rideController.trackRide);
+
 router.post('/create',
     authMiddleware.authUser,
     body('pickup').isString().isLength({ min: 3 }).withMessage('Invalid pickup address'),

@@ -78,7 +78,7 @@ function initializeSocket(server) {
       const date = moment().tz("Asia/Kolkata").format("MMM DD");
       socket.to(rideId).emit("receiveMessage", { msg, by: userType, time });
       try {
-        const ride = await rideModel.findOne({ _id: rideId });
+        const ride = await rideModel.findOne({ _id: rideId }).select("+otp");
         ride.messages.push({
           msg: msg,
           by: userType,
