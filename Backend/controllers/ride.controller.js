@@ -174,10 +174,14 @@ module.exports.confirmRide = async (req, res) => {
       captain: req.captain,
     });
 
-    sendMessageToSocketId(ride.user.socketId, {
-      event: "ride-confirmed",
-      data: ride,
-    });
+    if (ride.user && ride.user.socketId) {
+      sendMessageToSocketId(ride.user.socketId, {
+        event: "ride-confirmed",
+        data: ride,
+      });
+    } else {
+      console.warn("User socket ID not found for ride confirmation:", ride._id);
+    }
 
     // TODO: Remove ride from other captains
     // Implement logic here, maybe emit an event or update captain listings

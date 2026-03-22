@@ -14,6 +14,8 @@ import RouteSelector from "./RouteSelector";
 import SplashScreen from "./SplashScreen";
 import StarRatingComponent from "./StarRatingComponent";
 import FeedbackModal from "./FeedbackModal";
+import AISuggestions from "./AISuggestions";
+import SaarthiAIModal from "./SaarthiAIModal";
 
 export {
   Alert,
@@ -32,4 +34,6 @@ export {
   SplashScreen,
   StarRatingComponent,
   FeedbackModal,
+  AISuggestions,
+  SaarthiAIModal,
 };

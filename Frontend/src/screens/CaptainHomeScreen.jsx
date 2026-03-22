@@ -93,19 +93,24 @@ function CaptainHomeScreen() {
         );
         setLoading(false);
         setShowBtn("arrive"); // New state to show "I Have Arrived" button
-        // Route from Driver Current Location to Pickup
+        // Reliable Route from Driver Current Location to Pickup using Directions API
+        const origin = `${riderLocation.ltd},${riderLocation.lng}`;
+        const destination = encodeURIComponent(newRide.pickup);
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
         setMapLocation(
-          `https://www.google.com/maps?q=${riderLocation.ltd},${riderLocation.lng} to ${newRide.pickup}&output=embed`
+          `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`
         );
         Console.log(response);
       }
     } catch (error) {
       setLoading(false);
-      showAlert('Some error occured', error.response.data.message, 'failure');
-      Console.log(error.response);
+      const errorMsg = error.response?.data?.message || 'Something went wrong while accepting the ride.';
+      const errorTitle = error.response?.status === 400 ? 'Ride Unavailable' : 'Error';
+      showAlert(errorTitle, errorMsg, 'failure');
+      Console.log("Accept Ride Error:", error.response?.data || error);
       setTimeout(() => {
         clearRideData();
-      }, 1000);
+      }, 1500);
     }
   };
 
@@ -145,8 +150,11 @@ function CaptainHomeScreen() {
             },
           }
         );
+        const origin = encodeURIComponent(newRide.pickup);
+        const destination = encodeURIComponent(newRide.destination);
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
         setMapLocation(
-          `https://www.google.com/maps?q=${newRide.pickup} to ${newRide.destination}&output=embed`
+          `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`
         );
         setShowBtn("end-ride");
         setLoading(false);

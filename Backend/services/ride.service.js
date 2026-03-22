@@ -169,12 +169,6 @@ module.exports.confirmRide = async ({ rideId, captain }) => {
       }
     );
 
-    const captainData = await captainModel.findOne({ _id: captain._id });
-
-    captainData.rides.push(rideId);
-
-    await captainData.save();
-
     const ride = await rideModel
       .findOne({
         _id: rideId,
@@ -184,13 +178,23 @@ module.exports.confirmRide = async ({ rideId, captain }) => {
       .select("+otp");
 
     if (!ride) {
-      throw new Error("Ride not found");
+      throw new Error("Ride not found after confirmation");
+    }
+
+    const captainData = await captainModel.findOne({ _id: captain._id });
+    if (!captainData) {
+      throw new Error("Captain record not found");
+    }
+
+    if (!captainData.rides.includes(rideId)) {
+      captainData.rides.push(rideId);
+      await captainData.save();
     }
 
     return ride;
   } catch (error) {
-    console.log(error)
-    throw new Error("Error occured while confirming ride.");
+    console.log("Confirm Ride Service Error:", error);
+    throw error;
   }
 };
 

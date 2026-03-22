@@ -13,11 +13,26 @@ const MapComponent = ({ routesData, selectedMode, onRouteClick }) => {
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API
   });
 
-  const fastestPath = useMemo(() => decodePolyline(routesData?.fastest?.polyline), [routesData]);
-  const safestPath = useMemo(() => decodePolyline(routesData?.safest?.polyline), [routesData]);
+  const fastestPath = useMemo(() => {
+    try {
+      return routesData?.fastest?.polyline ? decodePolyline(routesData.fastest.polyline) : [];
+    } catch (e) {
+      console.error("Polyline decoding failed", e);
+      return [];
+    }
+  }, [routesData]);
+
+  const safestPath = useMemo(() => {
+    try {
+      return routesData?.safest?.polyline ? decodePolyline(routesData.safest.polyline) : [];
+    } catch (e) {
+      console.error("Polyline decoding failed", e);
+      return [];
+    }
+  }, [routesData]);
 
   const center = useMemo(() => {
-    if (fastestPath.length > 0) return fastestPath[0];
+    if (fastestPath && fastestPath.length > 0) return fastestPath[0];
     return { lat: 21.1458, lng: 79.0882 }; // Nagpur center
   }, [fastestPath]);
 

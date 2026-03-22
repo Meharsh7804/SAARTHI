@@ -8,10 +8,14 @@ import {
   SelectVehicle,
   RideDetails,
   Sidebar,
-  RouteSelector,
   MapComponent,
+  RouteSelector,
   FeedbackModal,
+  AISuggestions,
+  SaarthiAIModal,
 } from "../components";
+import { getSafetySuggestion, getSafePlaces, calculateBookingTime } from "../utils/aiAssistant";
+import { Sparkles } from "lucide-react";
 import axios from "axios";
 import debounce from "lodash.debounce";
 import { SocketDataContext } from "../contexts/SocketContext";
@@ -56,6 +60,16 @@ function UserHomeScreen() {
   const [showRideDetailsPanel, setShowRideDetailsPanel] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [lastRideData, setLastRideData] = useState(null);
+  
+  // Saarthi AI State
+  const [showSaarthiModal, setShowSaarthiModal] = useState(false);
+  const [autoBookingTask, setAutoBookingTask] = useState(
+    JSON.parse(localStorage.getItem("autoBookingTask")) || null
+  );
+  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [safePlacesData, setSafePlacesData] = useState(null);
+  const [autoBookingMessage, setAutoBookingMessage] = useState("");
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
 
   const handleLocationChange = useCallback(
     debounce(async (inputValue, token) => {
@@ -98,24 +112,55 @@ function UserHomeScreen() {
         { headers: { token: token } }
       );
       
-      setRoutesData(response.data);
-      setFare(response.data.fastest.fare);
-      setSelectedRouteMode('fastest');
+      if (response.data && response.data.fastest) {
+        setRoutesData(response.data);
+        setFare(response.data.fastest.fare);
+        setSelectedRouteMode('fastest');
 
-      setShowFindTripPanel(false);
-      setShowSelectVehiclePanel(true);
+        // AI Suggestions
+        const crimeIndex = 100 - (response.data.fastest.safetyScore || 65);
+        const hour = new Date().getHours();
+        setAiSuggestions(getSafetySuggestion({ time: hour, crimeIndex }));
+        setSafePlacesData(getSafePlaces({ time: hour }));
+        setShowAISuggestions(true); // Trigger floating UI
+
+        setShowFindTripPanel(false);
+        setShowSelectVehiclePanel(true);
+      } else {
+        alert("Unable to fetch routes. Please check your locations.");
+      }
       setLocationSuggestion([]);
       setLoading(false);
     } catch (error) {
-      Console.log(error);
+      Console.error(error);
       setLoading(false);
+      alert("Failed to find routes. Please try again.");
     }
   };
 
   const handleRouteModeChange = (mode) => {
-    setSelectedRouteMode(mode);
-    setFare(routesData[mode].fare);
+    if (routesData && routesData[mode]) {
+      setSelectedRouteMode(mode);
+      setFare(routesData[mode].fare);
+      
+      const crimeIndex = 100 - (routesData[mode].safetyScore || 65);
+      const hour = new Date().getHours();
+      setAiSuggestions(getSafetySuggestion({ time: hour, crimeIndex }));
+      setSafePlacesData(getSafePlaces({ time: hour }));
+      setShowAISuggestions(true); // Re-trigger on route change
+    }
   };
+
+  // Auto-fade AI Suggestions after 6 seconds
+  useEffect(() => {
+    let timer;
+    if (showAISuggestions) {
+      timer = setTimeout(() => {
+        setShowAISuggestions(false);
+      }, 6000);
+    }
+    return () => clearTimeout(timer);
+  }, [showAISuggestions]);
 
   const createRide = async () => {
     try {
@@ -218,24 +263,34 @@ function UserHomeScreen() {
 
     socket.on("ride-confirmed", (data) => {
       clearTimeout(rideTimeout.current);
-      setMapLocation(`https://www.google.com/maps?q=${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]} to ${pickupLocation}&output=embed`);
+      const origin = `${data.captain.location.coordinates[1]},${data.captain.location.coordinates[0]}`;
+      const destination = encodeURIComponent(pickupLocation);
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
+      setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
+      setRoutesData(null); // Switch from trip overview to live tracking (iframe)
       setConfirmedRideData(data);
       setRideStatus("accepted");
     });
 
     socket.on("ride-arrived", (data) => {
         setRideStatus("arrived");
-        setMapLocation(`https://www.google.com/maps?q=${data.pickup}&output=embed`);
+        setMapLocation(`https://www.google.com/maps?q=${encodeURIComponent(data.pickup)}&output=embed`);
     });
 
     socket.on("ride-started", (data) => {
       setRideStatus("ongoing");
-      setMapLocation(`https://www.google.com/maps?q=${data.pickup} to ${data.destination}&output=embed`);
+      const origin = encodeURIComponent(data.pickup);
+      const destination = encodeURIComponent(data.destination);
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
+      setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
     });
 
     socket.on("captain-location-updated", (data) => {
       if (confirmedRideData) {
-        setMapLocation(`https://www.google.com/maps?q=${data.location.ltd},${data.location.lng} to ${pickupLocation}&output=embed`);
+        const origin = `${data.location.ltd},${data.location.lng}`;
+        const destination = encodeURIComponent(pickupLocation);
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
+        setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
       }
     });
 
@@ -260,6 +315,127 @@ function UserHomeScreen() {
       socket.off("captain-location-updated");
     };
   }, [user, socket]);
+
+  // Saarthi AI: Auto Booking Check
+  useEffect(() => {
+    let interval = null;
+    
+    if (autoBookingTask) {
+      Console.log(`Saarthi AI active. Target booking time: ${autoBookingTask.bookingTime}`);
+      interval = setInterval(() => {
+        const now = new Date();
+        const bookingTime = new Date(autoBookingTask.bookingTime);
+        
+        if (now >= bookingTime) {
+          Console.log("Saarthi AI: Booking condition met!");
+          setAutoBookingMessage("Saarthi AI is booking your ride now to ensure timely arrival.");
+          handleAutoBookingTrigger(autoBookingTask);
+          setAutoBookingTask(null);
+          localStorage.removeItem("autoBookingTask");
+          if (interval) clearInterval(interval);
+        }
+      }, 5000); // Check more frequently (every 5 seconds)
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoBookingTask]);
+
+  const handleAutoBookingTrigger = async (task) => {
+    try {
+      setLoading(true);
+      setAutoBookingMessage("Saarthi AI is fetching current route details...");
+      
+      const response = await axios.get(
+        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${task.pickup}&destination=${task.destination}`,
+        { headers: { token: token } }
+      );
+      
+      if (!response.data || !response.data.fastest) {
+        throw new Error("Unable to fetch routes for auto-booking");
+      }
+
+      setRoutesData(response.data);
+      setFare(response.data.fastest.fare);
+      setPickupLocation(task.pickup);
+      setDestinationLocation(task.destination);
+      
+      setAutoBookingMessage("Saarthi AI is contacting captains...");
+      
+      const createResponse = await axios.post(
+        `${import.meta.env.VITE_SERVER_URL}/ride/create`,
+        {
+          pickup: task.pickup,
+          destination: task.destination,
+          vehicleType: "car", // Default car for SaaS auto-book
+          selectedRouteMode: "fastest",
+        },
+        { headers: { token: token } }
+      );
+      
+      const rideData = {
+        pickup: task.pickup,
+        destination: task.destination,
+        vehicleType: "car",
+        fare: response.data.fastest.fare,
+        confirmedRideData: null,
+        _id: createResponse.data._id,
+      };
+      
+      localStorage.setItem("rideDetails", JSON.stringify(rideData));
+      setRideId(createResponse.data._id);
+      
+      setShowFindTripPanel(false);
+      setShowRideDetailsPanel(true);
+      setRideCreated(true);
+      setLoading(false);
+      
+      // Clear message after success
+      setTimeout(() => setAutoBookingMessage(""), 5000);
+
+      // Start timeout for no captains
+      rideTimeout.current = setTimeout(() => {
+        cancelRide();
+        setTimeoutMessage("No riders are currently available for your scheduled ride. Please try manually.");
+      }, 30000);
+
+    } catch (error) {
+      Console.error("Auto-booking failed:", error);
+      setLoading(false);
+      setAutoBookingMessage("");
+      alert("Saarthi AI was unable to book your scheduled ride. Please check your connection or locations.");
+    }
+  };
+
+  const startAutoBooking = async (data) => {
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${data.pickup}&destination=${data.destination}`,
+        { headers: { token: token } }
+      );
+      
+      const travelTimeMinutes = Math.ceil(response.data.fastest.duration.value / 60);
+      const bookingTime = calculateBookingTime(data.arrivalTime, travelTimeMinutes, 5);
+      
+      const task = {
+        ...data,
+        bookingTime: bookingTime.toISOString(),
+      };
+      
+      setAutoBookingTask(task);
+      localStorage.setItem("autoBookingTask", JSON.stringify(task));
+      setLoading(false);
+      setShowSaarthiModal(false);
+      
+      alert(`Saarthi AI scheduled your ride booking for ${bookingTime.toLocaleTimeString()}`);
+    } catch (error) {
+      Console.error(error);
+      setLoading(false);
+      alert("Failed to schedule auto-booking. Please check locations.");
+    }
+  };
 
   useEffect(() => {
     const storedRideDetails = localStorage.getItem("rideDetails");
@@ -326,6 +502,30 @@ function UserHomeScreen() {
         src={logo}
         alt="Logo"
       />
+
+      {/* Floating Saarthi AI Button */}
+      <button 
+        onClick={() => setShowSaarthiModal(true)}
+        className="absolute right-4 top-16 z-[60] p-3 bg-white border border-zinc-100 shadow-xl rounded-full hover:scale-110 active:scale-95 transition-all duration-300 group"
+        title="Use Saarthi AI"
+      >
+        <Sparkles size={24} className="text-blue-600 transition-colors group-hover:text-blue-500" />
+      </button>
+
+      {/* Floating AI Suggestions Popup */}
+      {showAISuggestions && aiSuggestions && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm animate-in fade-in slide-in-from-top-4 duration-500">
+          <AISuggestions 
+            suggestion={aiSuggestions} 
+            safePlacesData={safePlacesData} 
+          />
+          <div className="absolute top-1 right-1 p-1">
+            <button onClick={() => setShowAISuggestions(false)} className="text-zinc-400 hover:text-zinc-600">
+              <Sparkles size={12} className="opacity-50" />
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Map Section */}
       <div className="absolute top-0 left-0 w-full h-[70vh] z-0">
@@ -374,6 +574,31 @@ function UserHomeScreen() {
                 {timeoutMessage}
               </div>
             )}
+            
+            {autoBookingMessage && (
+              <div className="bg-blue-50 text-blue-600 p-3 rounded-xl text-sm mb-4 border border-blue-100 flex items-center gap-2">
+                <Sparkles size={16} className="animate-pulse" />
+                {autoBookingMessage}
+              </div>
+            )}
+
+            {autoBookingTask && (
+              <div className="bg-zinc-50 border border-zinc-100 p-3 rounded-xl mb-4 flex justify-between items-center text-xs">
+                <div>
+                  <p className="font-bold text-zinc-900">Auto-booking active</p>
+                  <p className="text-zinc-500">Pick: {autoBookingTask.pickup} • Arr: {autoBookingTask.arrivalTime}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setAutoBookingTask(null);
+                    localStorage.removeItem("autoBookingTask");
+                  }}
+                  className="text-red-600 font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
             <div className="flex flex-col gap-3 relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 w-0.5 h-1/2 bg-black/10 z-0"></div>
                 <div className="relative">
@@ -407,7 +632,7 @@ function UserHomeScreen() {
                     loading={loading}
                     fun={() => getDistanceAndFare(pickupLocation, destinationLocation)}
                 />
-              </div>
+            </div>
             )}
 
             <div className="mt-4 max-h-[25vh] overflow-y-auto">
@@ -466,9 +691,23 @@ function UserHomeScreen() {
                   confirmedRideData={confirmedRideData}
                   rideStatus={rideStatus}
                 />
+                {/* Old AI Suggestions placement removed to use floating version */}
             </div>
         )}
       </div>
+
+      <SaarthiAIModal 
+        isOpen={showSaarthiModal} 
+        onClose={() => {
+          setShowSaarthiModal(false);
+          setLocationSuggestion([]);
+        }}
+        onStartAutoBooking={startAutoBooking}
+        loading={loading}
+        suggestions={locationSuggestion}
+        onLocationChange={(value) => handleLocationChange(value, token)}
+        setSuggestions={setLocationSuggestion}
+      />
 
       <FeedbackModal
         isOpen={showFeedbackModal}
