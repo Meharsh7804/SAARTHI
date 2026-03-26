@@ -52,3 +52,20 @@ module.exports.getAutoCompleteSuggestions = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+module.exports.getSafePlaces = async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    
+    if (!lat || !lng) {
+      return res.status(400).json({ message: "Latitude and longitude are required" });
+    }
+
+    const places = await mapService.getNearbySafePlaces(parseFloat(lat), parseFloat(lng));
+    
+    res.status(200).json(places);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};

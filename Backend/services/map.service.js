@@ -142,3 +142,97 @@ module.exports.getCaptainsInTheRadius = async (ltd, lng, radius, vehicleType, us
     throw new Error("Error in getting captain in radius: " + error.message);
   }
 };
+
+module.exports.resolveSmartLocation = async (extractedLocation, pickupLocationStr) => {
+  try {
+    const apiKey = process.env.GOOGLE_MAPS_API;
+    if (!extractedLocation) return null;
+
+    let locationBias = "";
+    // If pickup isn't just "Current Location", try to get coords for biasing
+    if (pickupLocationStr && pickupLocationStr !== "Current Location") {
+      // Check if it's already "lat, lng" format
+      if (pickupLocationStr.match(/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/)) {
+        locationBias = `&location=${pickupLocationStr.replace(/\s/g, '')}&radius=15000`;
+      } else {
+        try {
+          const coords = await module.exports.getAddressCoordinate(pickupLocationStr);
+          locationBias = `&location=${coords.ltd},${coords.lng}&radius=15000`;
+        } catch (e) {
+          console.warn("[Map Service] Could not get coords for pickup, searching without bias.");
+        }
+      }
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(extractedLocation)}${locationBias}&key=${apiKey}`;
+    const response = await axios.get(url);
+
+    if (response.data.status === "OK" && response.data.predictions && response.data.predictions.length > 0) {
+      // Return the best match's full description
+      return response.data.predictions[0].description;
+    }
+    return null;
+  } catch (err) {
+    console.error("[Map Service] resolveSmartLocation error:", err.message);
+    return null;
+  }
+};
+
+module.exports.getNearbySafePlaces = async (ltd, lng, radius = 2000) => {
+  try {
+    const apiKey = process.env.GOOGLE_MAPS_API;
+    const types = ["police", "hospital", "pharmacy", "gas_station"];
+    const typeString = types.join("|");
+    
+    // Using Place Search API (Nearby Search)
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${ltd},${lng}&radius=${radius}&type=${typeString}&key=${apiKey}`;
+    
+    const response = await axios.get(url);
+    
+    if (response.data.status === "OK") {
+      // Format and calculate approximate distance
+      const places = response.data.results.slice(0, 5).map(place => {
+        // Approximate distance based on radius ratio (since exact distance isn't provided by nearby search natively)
+        // Or we can just calculate bird flight distance
+        const pLtd = place.geometry.location.lat;
+        const pLng = place.geometry.location.lng;
+        
+        // Haversine formula
+        const R = 6371; // km
+        const dLat = (pLtd - ltd) * Math.PI / 180;
+        const dLon = (pLng - lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(ltd * Math.PI / 180) * Math.cos(pLtd * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distanceKm = R * c;
+        const distanceStr = distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m away` : `${distanceKm.toFixed(1)}km away`;
+        
+        let typeLabel = "Safe Place";
+        if (place.types.includes("police")) typeLabel = "Police Station";
+        else if (place.types.includes("hospital")) typeLabel = "Hospital";
+        else if (place.types.includes("pharmacy")) typeLabel = "Pharmacy (24x7)";
+        else if (place.types.includes("gas_station")) typeLabel = "Petrol Pump";
+
+        return {
+          name: place.name,
+          type: typeLabel,
+          distance: distanceStr,
+          distanceKm: distanceKm,
+          lat: pLtd,
+          lng: pLng
+        };
+      });
+
+      // Sort by distance
+      places.sort((a, b) => a.distanceKm - b.distanceKm);
+
+      return places.slice(0, 3); // top 3
+    }
+    
+    return [];
+  } catch (error) {
+    console.error("[Map Service] Error fetching safe places:", error.message);
+    return []; // fallback to empty array
+  }
+};

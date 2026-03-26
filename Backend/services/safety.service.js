@@ -26,6 +26,7 @@ loadSafetyData();
  */
 module.exports.calculateRouteSafety = (route) => {
     let scores = [];
+    let hasHighRiskArea = false;
     
     // Combine all step instructions and summaries
     const routeText = (route.summary + ' ' + route.legs.map(leg => 
@@ -34,15 +35,34 @@ module.exports.calculateRouteSafety = (route) => {
 
     safetyData.forEach(item => {
         if (routeText.includes(item.area.toLowerCase())) {
-            scores.push(parseInt(item.safety_score));
+            const score = parseInt(item.safety_score);
+            scores.push(score);
+            if (score <= 40) {
+                hasHighRiskArea = true;
+            }
         }
     });
 
     // If no specific areas matched, give a default base safety score
-    if (scores.length === 0) return 65; 
+    let baseScore = scores.length === 0 ? 65 : scores.reduce((a, b) => a + b, 0) / scores.length;
+    
+    // Time of day logic
+    const currentHour = new Date().getHours();
+    const isNight = currentHour >= 20 || currentHour <= 5; // 8 PM to 5 AM
 
-    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    return Math.round(avg);
+    if (isNight) {
+        baseScore -= 10; // penalty for night
+    }
+
+    // Route length logic (penalty for long isolated routes assuming > 15km)
+    const distanceMeters = route.legs && route.legs[0] && route.legs[0].distance ? route.legs[0].distance.value : 0;
+    if (distanceMeters > 15000) {
+        baseScore -= (distanceMeters / 5000); // subtract more for longer routes
+    }
+
+    baseScore = Math.max(10, Math.min(100, Math.round(baseScore))); // clamp between 10 and 100
+
+    return { safetyScore: baseScore, isNight, hasHighRiskArea };
 };
 
 module.exports.getSafetyData = () => safetyData;

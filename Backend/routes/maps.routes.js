@@ -23,6 +23,9 @@ router.get('/get-suggestions',
     mapController.getAutoCompleteSuggestions
 )
 
-
+router.get('/safe-places',
+    authMiddleware.authUser,
+    mapController.getSafePlaces
+)
 
 module.exports = router;

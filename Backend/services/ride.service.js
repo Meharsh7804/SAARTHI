@@ -52,6 +52,8 @@ const getFare = async (pickup, destination) => {
 
 module.exports.getFare = getFare;
 
+const { generateSuggestion } = require("../utils/aiSuggestions");
+
 module.exports.getFareWithRoutes = async (pickup, destination) => {
     if (!pickup || !destination) {
         throw new Error("Pickup and destination are required");
@@ -63,7 +65,15 @@ module.exports.getFareWithRoutes = async (pickup, destination) => {
         const leg = route.legs[0];
         const distanceValue = leg.distance.value;
         const durationValue = leg.duration.value;
-        const safetyScore = safetyService.calculateRouteSafety(route);
+        const { safetyScore, isNight, hasHighRiskArea } = safetyService.calculateRouteSafety(route);
+
+        const suggestion = generateSuggestion({ 
+            distance: distanceValue, 
+            duration: durationValue, 
+            safetyScore, 
+            isNight, 
+            hasHighRiskArea 
+        });
 
         const baseFare = { auto: 30, car: 50, bike: 20 };
         const perKmRate = { auto: 10, car: 15, bike: 8 };
@@ -80,6 +90,7 @@ module.exports.getFareWithRoutes = async (pickup, destination) => {
             distance: leg.distance,
             duration: leg.duration,
             safetyScore,
+            suggestion,         // Return the generated AI suggestion
             polyline: route.overview_polyline.points,
             summary: route.summary
         };
