@@ -139,11 +139,40 @@ function UserHomeScreen() {
         setFare(response.data.fastest.fare);
         setSelectedRouteMode('fastest');
 
-        // AI Suggestions
-        const crimeIndex = 100 - (response.data.fastest.safetyScore || 65);
-        const hour = new Date().getHours();
-        setAiSuggestions(getSafetySuggestion({ time: hour, crimeIndex }));
-        setSafePlacesData(getSafePlaces({ time: hour }));
+        // Dynamic AI Suggestions from Backend
+        setAiSuggestions(response.data.fastest.suggestion);
+
+        // Dynamically fetch nearby Safe Places based on pickup location
+        try {
+          const coordsRes = await axios.get(
+            `${import.meta.env.VITE_SERVER_URL}/map/get-coordinates?address=${encodeURIComponent(pickup)}`,
+            { headers: { token: token } }
+          );
+          if (coordsRes.data && coordsRes.data.ltd) {
+            const placesRes = await axios.get(
+              `${import.meta.env.VITE_SERVER_URL}/map/safe-places?lat=${coordsRes.data.ltd}&lng=${coordsRes.data.lng}`,
+              { headers: { token: token } }
+            );
+            if (placesRes.data && placesRes.data.length > 0) {
+              setSafePlacesData({
+                message: "Nearby Safe Places",
+                places: placesRes.data
+              });
+            } else {
+              setSafePlacesData({
+                message: "You are already in a relatively safe area. No emergency spots needed nearby.",
+                places: []
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Safe places error:", err);
+          setSafePlacesData({
+            message: "You are already in a relatively safe area. No emergency spots needed nearby.",
+            places: []
+          });
+        }
+
         setShowAISuggestions(true); // Trigger floating UI
 
         setShowFindTripPanel(false);
@@ -176,10 +205,7 @@ function UserHomeScreen() {
       setSelectedRouteMode(mode);
       setFare(routesData[mode].fare);
       
-      const crimeIndex = 100 - (routesData[mode].safetyScore || 65);
-      const hour = new Date().getHours();
-      setAiSuggestions(getSafetySuggestion({ time: hour, crimeIndex }));
-      setSafePlacesData(getSafePlaces({ time: hour }));
+      setAiSuggestions(routesData[mode].suggestion);
       setShowAISuggestions(true); // Re-trigger on route change
     }
   };
