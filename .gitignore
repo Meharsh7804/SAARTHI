@@ -1,1 +1,6 @@
 tasks.md
+ai-service/transformer_checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
