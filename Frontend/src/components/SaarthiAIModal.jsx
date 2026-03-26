@@ -1,17 +1,142 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, MapPin, Sparkles } from 'lucide-react';
+import { X, Clock, MapPin, Sparkles, Brain, Keyboard, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import Button from './Button';
 import LocationSuggestions from './LocationSuggestions';
+import axios from 'axios';
 
-const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading, suggestions, onLocationChange, setSuggestions }) => {
+/**
+ * ============================================================
+ * SaarthiAIModal – Enhanced with Agentic NLP Prompt Tab
+ * ============================================================
+ * Two tabs:
+ *   1. "AI Prompt"  →  Type natural language, AI extracts everything
+ *   2. "Manual"     →  Original manual pickup/destination/time inputs
+ * ============================================================
+ */
+
+const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLoading, suggestions, onLocationChange, setSuggestions }) => {
+  const [activeTab, setActiveTab] = useState("ai");  // "ai" | "manual"
+
+  // ── Manual tab state (original) ─────────────────────────
   const [pickup, setPickup] = useState("");
   const [destination, setDestination] = useState("");
   const [arrivalTime, setArrivalTime] = useState("");
-  const [activeField, setActiveField] = useState(null); // 'pickup' or 'destination'
+  const [activeField, setActiveField] = useState(null);
+
+  // ── AI Prompt tab state ─────────────────────────────────
+  const [prompt, setPrompt] = useState("");
+  const [aiPickup, setAiPickup] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiError, setAiError] = useState("");
+  const [aiStep, setAiStep] = useState("input"); // "input" | "loading" | "result" | "error"
+
+  // Reset on open/close
+  const token = localStorage.getItem("token");
+
+  // ── AI Prompt: Get current location as pickup ──────────
+  const getCurrentLocationText = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            setAiPickup(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+          } catch {
+            setAiPickup("Current Location");
+          }
+        },
+        () => setAiPickup("Current Location")
+      );
+    }
+  };
+
+  // All hooks MUST be above the early return
+  useEffect(() => {
+    if (isOpen) {
+      setAiStep("input");
+      setAiResult(null);
+      setAiError("");
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !aiPickup) {
+      getCurrentLocationText();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  // ── AI Prompt: Submit to backend ───────────────────────
+  const handleAISubmit = async () => {
+    if (!prompt.trim()) return;
+
+    const effectivePickup = aiPickup.trim() || "Current Location";
+
+    setAiStep("loading");
+    setAiLoading(true);
+    setAiError("");
+    setAiResult(null);
+
+    console.log("[Saarthi AI] Sending prompt:", prompt);
+
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_SERVER_URL}/ai/extract-and-plan`,
+        { prompt: prompt.trim(), pickup: effectivePickup },
+        { headers: { token } }
+      );
+
+      if (response.data.success) {
+        console.log("[Saarthi AI] AI Response Received:", response.data);
+        setAiResult(response.data);
+        setAiStep("result");
+      } else {
+        throw new Error(response.data.message || "Unknown error");
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Something went wrong";
+      console.error("[Saarthi AI] Error:", msg);
+      setAiError(msg);
+      setAiStep("error");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // ── AI Prompt: Confirm and start auto-booking ──────────
+  const handleAIConfirm = () => {
+    if (!aiResult) return;
+
+    console.log("[Saarthi AI] Booking scheduled at:", aiResult.plan.bookingTimeFormatted);
+    console.log("[Saarthi AI] Ride auto-triggered");
+
+    const bookingData = {
+      pickup: aiResult.plan.pickup,
+      destination: aiResult.plan.destination,
+      arrivalTime: aiResult.plan.arrivalTimeFormatted,
+      bookingTime: aiResult.plan.bookingTime,
+    };
+
+    // If bookNow, trigger immediately via the existing flow
+    if (aiResult.plan.bookNow) {
+      onStartAutoBooking({
+        pickup: aiResult.plan.pickup,
+        destination: aiResult.plan.destination,
+        arrivalTime: new Date(aiResult.plan.arrivalTime).toTimeString().slice(0, 5),
+      });
+    } else {
+      onStartAutoBooking({
+        pickup: aiResult.plan.pickup,
+        destination: aiResult.plan.destination,
+        arrivalTime: new Date(aiResult.plan.arrivalTime).toTimeString().slice(0, 5),
+      });
+    }
+  };
+
+  // ── Manual tab: Submit handler (original logic) ────────
+  const handleManualSubmit = (e) => {
     e.preventDefault();
     if (pickup && destination && arrivalTime) {
       onStartAutoBooking({ pickup, destination, arrivalTime });
@@ -22,21 +147,23 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading, suggesti
     const { id, value } = e.target;
     if (id === "pickup") setPickup(value);
     if (id === "destination") setDestination(value);
-    
     setActiveField(id);
     onLocationChange(value);
   };
 
+  // ── RENDER ─────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300 flex flex-col max-h-[90vh]">
-        <div className="p-6 overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
+        
+        {/* Header */}
+        <div className="p-6 pb-0">
+          <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
+              <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl shadow-lg shadow-blue-500/20">
                 <Sparkles className="text-white" size={20} />
               </div>
-              <h2 className="text-xl font-bold">Saarthi Agentic Mode</h2>
+              <h2 className="text-xl font-bold">Saarthi AI</h2>
             </div>
             <button 
               onClick={onClose}
@@ -46,104 +173,332 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading, suggesti
             </button>
           </div>
 
-          <p className="text-sm text-zinc-500 mb-6 font-medium">
-            Enter your trip details and desired arrival time. Saarthi AI will automatically book your ride at the perfect moment.
-          </p>
+          {/* Tab Switcher */}
+          <div className="flex bg-zinc-100 rounded-2xl p-1 mb-4">
+            <button
+              onClick={() => setActiveTab("ai")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                activeTab === "ai" 
+                  ? "bg-white shadow-sm text-blue-600" 
+                  : "text-zinc-500 hover:text-zinc-700"
+              }`}
+            >
+              <Brain size={14} />
+              AI Prompt
+            </button>
+            <button
+              onClick={() => setActiveTab("manual")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 ${
+                activeTab === "manual" 
+                  ? "bg-white shadow-sm text-blue-600" 
+                  : "text-zinc-500 hover:text-zinc-700"
+              }`}
+            >
+              <Keyboard size={14} />
+              Manual
+            </button>
+          </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 flex flex-col">
-            <div className="relative">
-              <div className="absolute left-3 top-5 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg">
-                <MapPin size={16} className="text-zinc-600" />
-              </div>
-              <input
-                id="pickup"
-                type="text"
-                placeholder="Pickup Location"
-                value={pickup}
-                onChange={handleInputChange}
-                onFocus={() => setActiveField('pickup')}
-                className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium"
-                required
-                autoComplete="off"
-              />
-              {activeField === 'pickup' && suggestions.length > 0 && (
-                <div className="mt-2 bg-white rounded-xl border border-zinc-100 shadow-xl overflow-hidden max-h-[200px] overflow-y-auto z-20">
-                  <LocationSuggestions 
-                    suggestions={suggestions} 
-                    setSuggestions={setSuggestions} 
-                    setPickupLocation={setPickup} 
-                    setDestinationLocation={setDestination} 
-                    input="pickup" 
+        {/* ── AI PROMPT TAB ──────────────────────────────── */}
+        {activeTab === "ai" && (
+          <div className="px-6 pb-6 overflow-y-auto">
+            
+            {aiStep === "input" && (
+              <>
+                <p className="text-sm text-zinc-500 mb-4 font-medium leading-relaxed">
+                  Tell Saarthi where and when you want to go — in any language. Our AI will understand your request and book the ride automatically.
+                </p>
+
+                {/* Pickup override */}
+                <div className="mb-3">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block ml-1">
+                    Your Pickup Location
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-green-50 rounded-lg">
+                      <MapPin size={14} className="text-green-600" />
+                    </div>
+                    <input
+                      type="text"
+                      value={aiPickup}
+                      onChange={(e) => setAiPickup(e.target.value)}
+                      placeholder="Current Location"
+                      className="w-full bg-zinc-50 pl-12 pr-4 py-3 rounded-xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* NLP Prompt */}
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block ml-1">
+                    Tell Saarthi your plan
+                  </label>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="e.g. Mujhe 9:30 baje Sitabuldi jana hai"
+                    rows={3}
+                    className="w-full bg-zinc-50 px-4 py-3 rounded-xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium resize-none"
                   />
                 </div>
-              )}
-            </div>
 
-            <div className="relative">
-              <div className="absolute left-3 top-5 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg">
-                <MapPin size={16} className="text-zinc-600" />
-              </div>
-              <input
-                id="destination"
-                type="text"
-                placeholder="Drop-off Location"
-                value={destination}
-                onChange={handleInputChange}
-                onFocus={() => setActiveField('destination')}
-                className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium"
-                required
-                autoComplete="off"
-              />
-              {activeField === 'destination' && suggestions.length > 0 && (
-                <div className="mt-2 bg-white rounded-xl border border-zinc-100 shadow-xl overflow-hidden max-h-[200px] overflow-y-auto z-20">
-                  <LocationSuggestions 
-                    suggestions={suggestions} 
-                    setSuggestions={setSuggestions} 
-                    setPickupLocation={setPickup} 
-                    setDestinationLocation={setDestination} 
-                    input="destination" 
-                  />
+                {/* Sample prompts */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-2">Try saying:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Mujhe 9:30 baje Sitabuldi jana hai",
+                      "Reach Civil Lines at 10 AM",
+                      "Airport 5:50 tak pahuchna hai",
+                    ].map((sample) => (
+                      <button
+                        key={sample}
+                        onClick={() => setPrompt(sample)}
+                        className="text-[10px] px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-full font-medium hover:bg-blue-100 transition-colors"
+                      >
+                        {sample}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div>
-              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block ml-1">
-                Desired Arrival Time
-              </label>
+                <button
+                  onClick={handleAISubmit}
+                  disabled={!prompt.trim()}
+                  className={`w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-300 ${
+                    prompt.trim()
+                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98]"
+                      : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                  }`}
+                >
+                  <Brain size={16} />
+                  Use Saarthi AI
+                </button>
+              </>
+            )}
+
+            {aiStep === "loading" && (
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center animate-pulse">
+                    <Brain size={28} className="text-white" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-lg">
+                    <Loader2 size={14} className="text-blue-600 animate-spin" />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-zinc-900 mb-1">AI is understanding your request…</p>
+                  <p className="text-xs text-zinc-500">Extracting destination and time from your prompt</p>
+                </div>
+              </div>
+            )}
+
+            {aiStep === "result" && aiResult && (
+              <div className="space-y-4">
+                {/* Success badge */}
+                <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl p-3">
+                  <CheckCircle size={18} className="text-green-600 flex-shrink-0" />
+                  <p className="text-xs font-bold text-green-800">AI understood your request!</p>
+                </div>
+
+                {/* Extracted data */}
+                <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-100">
+                  {aiResult.plan.destination && aiResult.plan.originalDestinationQuery && aiResult.plan.destination !== aiResult.plan.originalDestinationQuery ? (
+                    <div className="flex flex-col gap-2">
+                       <div className="flex justify-between items-start">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Detected</span>
+                        <span className="text-sm font-bold text-zinc-900 text-right">{aiResult.plan.originalDestinationQuery}</span>
+                      </div>
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Matched Location</span>
+                        <span className="text-sm font-bold text-violet-600 text-right max-w-[200px] truncate">{aiResult.plan.destination.split(',')[0]}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Destination</span>
+                      <span className="text-sm font-bold text-zinc-900 truncate max-w-[200px] text-right">{aiResult.plan.destination || aiResult.extracted.drop}</span>
+                    </div>
+                  )}
+                  <div className="h-px bg-zinc-200" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Arrival Time</span>
+                    <span className="text-sm font-bold text-zinc-900">{aiResult.plan.arrivalTimeFormatted}</span>
+                  </div>
+                  <div className="h-px bg-zinc-200" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Travel Time</span>
+                    <span className="text-sm font-bold text-zinc-900">{aiResult.plan.travelTimeMinutes} min</span>
+                  </div>
+                  <div className="h-px bg-zinc-200" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ride Booking At</span>
+                    <span className="text-sm font-extrabold text-blue-600">{aiResult.plan.bookingTimeFormatted}</span>
+                  </div>
+                  <div className="h-px bg-zinc-200" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Source</span>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      aiResult.extracted.source === "ner" 
+                        ? "bg-purple-100 text-purple-700" 
+                        : "bg-orange-100 text-orange-700"
+                    }`}>
+                      {aiResult.extracted.source === "ner" ? "spaCy NER" : "Transformer"}
+                    </span>
+                  </div>
+                </div>
+
+                {aiResult.plan.bookNow && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
+                    <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800 font-medium">
+                      Booking time has already passed — ride will be booked <strong>immediately</strong>.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setAiStep("input"); setAiResult(null); }}
+                    className="flex-1 py-3 rounded-2xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                  <button
+                    onClick={handleAIConfirm}
+                    className="flex-[2] py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98] transition-all"
+                  >
+                    Confirm & Book
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {aiStep === "error" && (
+              <div className="flex flex-col items-center justify-center py-8 gap-4">
+                <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+                  <AlertCircle size={28} className="text-red-500" />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-zinc-900 mb-1">Could not understand your request</p>
+                  <p className="text-xs text-zinc-500 max-w-xs">{aiError}</p>
+                </div>
+                <button
+                  onClick={() => setAiStep("input")}
+                  className="px-6 py-2.5 rounded-xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MANUAL TAB (original) ─────────────────────── */}
+        {activeTab === "manual" && (
+          <div className="px-6 pb-6 overflow-y-auto">
+            <p className="text-sm text-zinc-500 mb-6 font-medium">
+              Enter your trip details and desired arrival time. Saarthi AI will automatically book your ride at the perfect moment.
+            </p>
+
+            <form onSubmit={handleManualSubmit} className="space-y-4 flex flex-col">
               <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg pointer-events-none">
-                  <Clock size={16} className="text-zinc-600" />
+                <div className="absolute left-3 top-5 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg">
+                  <MapPin size={16} className="text-zinc-600" />
                 </div>
                 <input
-                  type="time"
-                  value={arrivalTime}
-                  onChange={(e) => {
-                    setArrivalTime(e.target.value);
-                    setActiveField(null);
-                  }}
-                  className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium appearance-none"
+                  id="pickup"
+                  type="text"
+                  placeholder="Pickup Location"
+                  value={pickup}
+                  onChange={handleInputChange}
+                  onFocus={() => setActiveField('pickup')}
+                  className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium"
                   required
+                  autoComplete="off"
                 />
+                {activeField === 'pickup' && suggestions.length > 0 && (
+                  <div className="mt-2 bg-white rounded-xl border border-zinc-100 shadow-xl overflow-hidden max-h-[200px] overflow-y-auto z-20">
+                    <LocationSuggestions 
+                      suggestions={suggestions} 
+                      setSuggestions={setSuggestions} 
+                      setPickupLocation={setPickup} 
+                      setDestinationLocation={setDestination} 
+                      input="pickup" 
+                    />
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="mt-4 pt-2">
-              <Button
-                title="Start Auto Booking"
-                loading={loading}
-                type="submit"
-              />
-              <div className="flex items-center justify-center gap-1.5 mt-3 text-zinc-400">
-                <div className="w-1 h-1 bg-zinc-300 rounded-full"></div>
-                <p className="text-[10px] font-medium leading-none">
-                  Triggers booking approx. travel time + 5min buffer.
-                </p>
-                <div className="w-1 h-1 bg-zinc-300 rounded-full"></div>
+              <div className="relative">
+                <div className="absolute left-3 top-5 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg">
+                  <MapPin size={16} className="text-zinc-600" />
+                </div>
+                <input
+                  id="destination"
+                  type="text"
+                  placeholder="Drop-off Location"
+                  value={destination}
+                  onChange={handleInputChange}
+                  onFocus={() => setActiveField('destination')}
+                  className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium"
+                  required
+                  autoComplete="off"
+                />
+                {activeField === 'destination' && suggestions.length > 0 && (
+                  <div className="mt-2 bg-white rounded-xl border border-zinc-100 shadow-xl overflow-hidden max-h-[200px] overflow-y-auto z-20">
+                    <LocationSuggestions 
+                      suggestions={suggestions} 
+                      setSuggestions={setSuggestions} 
+                      setPickupLocation={setPickup} 
+                      setDestinationLocation={setDestination} 
+                      input="destination" 
+                    />
+                  </div>
+                )}
               </div>
-            </div>
-          </form>
-        </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5 block ml-1">
+                  Desired Arrival Time
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-lg pointer-events-none">
+                    <Clock size={16} className="text-zinc-600" />
+                  </div>
+                  <input
+                    type="time"
+                    value={arrivalTime}
+                    onChange={(e) => {
+                      setArrivalTime(e.target.value);
+                      setActiveField(null);
+                    }}
+                    className="w-full bg-zinc-50 pl-14 pr-4 py-4 rounded-2xl outline-none focus:ring-2 ring-blue-500/20 text-sm border border-zinc-100 font-medium appearance-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 pt-2">
+                <Button
+                  title="Start Auto Booking"
+                  loading={parentLoading}
+                  type="submit"
+                />
+                <div className="flex items-center justify-center gap-1.5 mt-3 text-zinc-400">
+                  <div className="w-1 h-1 bg-zinc-300 rounded-full"></div>
+                  <p className="text-[10px] font-medium leading-none">
+                    Triggers booking approx. travel time + 5min buffer.
+                  </p>
+                  <div className="w-1 h-1 bg-zinc-300 rounded-full"></div>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
