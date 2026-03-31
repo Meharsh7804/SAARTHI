@@ -28,6 +28,8 @@ function UserHomeScreen() {
   const [messages, setMessages] = useState(
     JSON.parse(localStorage.getItem("messages")) || []
   );
+  const [currentUserLocation, setCurrentUserLocation] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedInput, setSelectedInput] = useState("pickup");
   const [locationSuggestion, setLocationSuggestion] = useState([]);
@@ -70,6 +72,29 @@ function UserHomeScreen() {
   const [safePlacesData, setSafePlacesData] = useState(null);
   const [autoBookingMessage, setAutoBookingMessage] = useState("");
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [usualRide, setUsualRide] = useState(null);
+
+  useEffect(() => {
+    const fetchUsualRide = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_SERVER_URL}/ride/usual-ride`, {
+          headers: { token: localStorage.getItem("token") }
+        });
+        if (response.data && response.data.hasFrequentRide && response.data.frequentRides) {
+          setUsualRide(response.data.frequentRides[0]);
+        }
+      } catch(err) {
+        console.warn("Failed to fetch usual ride", err);
+      }
+    };
+    if (token) fetchUsualRide();
+
+    if (navigator.geolocation) {
+      updateLocation();
+      const locationInterval = setInterval(updateLocation, 5000);
+      return () => clearInterval(locationInterval);
+    }
+  }, [token]);
 
   const handleLocationChange = useCallback(
     debounce(async (inputValue, token) => {
@@ -77,7 +102,7 @@ function UserHomeScreen() {
         try {
           const response = await axios.get(
             `${import.meta.env.VITE_SERVER_URL}/map/get-suggestions?input=${inputValue}`,
-            { headers: { token: token } }
+            { headers: { token: localStorage.getItem("token") } }
           );
           Console.log(response.data);
           setLocationSuggestion(response.data);
@@ -119,7 +144,7 @@ function UserHomeScreen() {
     } else if (e.target.id == "destination") {
       setDestinationLocation(value);
     }
-    handleLocationChange(value, token);
+    handleLocationChange(value, localStorage.getItem("token"));
     if (e.target.value.length < 3) {
       setLocationSuggestion([]);
     }
@@ -131,7 +156,7 @@ function UserHomeScreen() {
       setTimeoutMessage("");
       const response = await axios.get(
         `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(destination)}`,
-        { headers: { token: token } }
+        { headers: { token: localStorage.getItem("token") } }
       );
       
       if (response.data && response.data.fastest) {
@@ -146,12 +171,12 @@ function UserHomeScreen() {
         try {
           const coordsRes = await axios.get(
             `${import.meta.env.VITE_SERVER_URL}/map/get-coordinates?address=${encodeURIComponent(pickup)}`,
-            { headers: { token: token } }
+            { headers: { token: localStorage.getItem("token") } }
           );
           if (coordsRes.data && coordsRes.data.ltd) {
             const placesRes = await axios.get(
               `${import.meta.env.VITE_SERVER_URL}/map/safe-places?lat=${coordsRes.data.ltd}&lng=${coordsRes.data.lng}`,
-              { headers: { token: token } }
+              { headers: { token: localStorage.getItem("token") } }
             );
             if (placesRes.data && placesRes.data.length > 0) {
               setSafePlacesData({
@@ -236,7 +261,7 @@ function UserHomeScreen() {
           selectedRouteMode: selectedRouteMode,
           genderPreference: rideMode === "female-only" ? "female" : null,
         },
-        { headers: { token: token } }
+        { headers: { token: localStorage.getItem("token") } }
       );
       
       const rideData = {
@@ -272,7 +297,7 @@ function UserHomeScreen() {
       setLoading(true);
       await axios.get(
         `${import.meta.env.VITE_SERVER_URL}/ride/cancel?rideId=${rideDetails._id || rideDetails.confirmedRideData._id}`,
-        { headers: { token: token } }
+        { headers: { token: localStorage.getItem("token") } }
       );
       if (rideTimeout.current) clearTimeout(rideTimeout.current);
       setLoading(false);
@@ -305,7 +330,9 @@ function UserHomeScreen() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setMapLocation(`https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}&output=embed`);
+          const { latitude, longitude } = position.coords;
+          setCurrentUserLocation({ lat: latitude, lng: longitude });
+          setMapLocation(`https://www.google.com/maps?q=${latitude},${longitude}&output=embed`);
         },
         (error) => console.error("Error fetching position:", error)
       );
@@ -329,7 +356,7 @@ function UserHomeScreen() {
         const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API;
         setMapLocation(`https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${destination}&mode=driving`);
       }
-      setRoutesData(null); // Switch from trip overview to live tracking (iframe)
+      // Keep routesData to show the planned path on the JS MapComponent
       setConfirmedRideData(data);
       setRideStatus("accepted");
     });
@@ -613,30 +640,38 @@ function UserHomeScreen() {
       )}
       
       {/* Map Section */}
-      <div className="absolute top-0 left-0 w-full h-full z-0">
-        {routesData ? (
+      <div className={`absolute top-0 left-0 w-full h-full z-0 transition-all duration-300 ${
+        rideStatus === "ongoing" ? "scale-105" : ""
+      }`}>
           <MapComponent 
             routesData={routesData} 
             selectedMode={selectedRouteMode} 
             onRouteClick={handleRouteModeChange} 
+            rideStatus={rideStatus}
+            confirmedRideData={confirmedRideData}
+            userLocation={currentUserLocation}
           />
-        ) : (
-          <iframe
-            src={mapLocation}
-            className="w-full h-full border-none"
-            allowFullScreen={true}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          ></iframe>
-        )}
       </div>
 
       {/* Main Panel */}
-      <div className={`absolute bottom-0 w-full rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.1)] z-10 transition-all duration-500 max-h-[90vh] flex flex-col overflow-hidden ${
-        rideMode === "female-only" 
-          ? "bg-pink-50/95 border-t-2 border-pink-200" 
-          : "bg-white"
-      }`}>
+      <div 
+        onClick={() => rideStatus === "ongoing" && setIsExpanded(!isExpanded)}
+        className={`absolute bottom-0 w-full rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.1)] z-10 transition-all duration-500 flex flex-col overflow-hidden cursor-pointer ${
+          rideStatus === "ongoing" 
+            ? (isExpanded ? "h-[80vh]" : "h-[22vh]") 
+            : "max-h-[90vh]"
+        } ${
+          rideMode === "female-only" 
+            ? "bg-pink-50/95 border-t-2 border-pink-200" 
+            : "bg-white"
+        }`}
+      >
+        {/* Swipe Indicator Part 3 Task 2 */}
+        {(rideStatus === "ongoing" || rideStatus === "accepted") && (
+          <div className="w-full flex justify-center py-2">
+            <div className={`w-12 h-1.5 rounded-full ${rideMode === "female-only" ? "bg-pink-200" : "bg-zinc-200"}`} />
+          </div>
+        )}
         
         {/* Step 1: Find a trip */}
         {showFindTripPanel && (
@@ -658,6 +693,39 @@ function UserHomeScreen() {
                   </button>
                 </div>
               </div>
+
+            {usualRide && pickupLocation === "" && destinationLocation === "" && (
+              <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl mb-4 text-sm shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles size={16} className="text-emerald-600" />
+                  <p className="font-bold text-emerald-900 text-sm">Book your usual ride?</p>
+                </div>
+                <p className="text-emerald-700 font-semibold mb-1 truncate">{usualRide.pickup}</p>
+                <div className="flex flex-col gap-1 pl-1 border-l-2 border-emerald-200 ml-1 py-1">
+                  <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
+                  <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
+                </div>
+                <p className="text-emerald-700 font-semibold mt-1 mb-3 truncate">{usualRide.destination}</p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                       setPickupLocation(usualRide.pickup);
+                       setDestinationLocation(usualRide.destination);
+                       getDistanceAndFare(usualRide.pickup, usualRide.destination);
+                    }}
+                    className="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg"
+                  >
+                    YES
+                  </button>
+                  <button 
+                    onClick={() => setUsualRide(null)}
+                    className="flex-1 bg-emerald-100 text-emerald-700 font-bold py-2 rounded-lg"
+                  >
+                    CHANGE
+                  </button>
+                </div>
+              </div>
+            )}
 
             {rideMode === "female-only" && (
               <div className="flex items-center gap-2 mb-4 bg-pink-100/50 p-2 rounded-lg border border-pink-200">
@@ -810,7 +878,7 @@ function UserHomeScreen() {
         onStartAutoBooking={startAutoBooking}
         loading={loading}
         suggestions={locationSuggestion}
-        onLocationChange={(value) => handleLocationChange(value, token)}
+        onLocationChange={(value) => handleLocationChange(value, localStorage.getItem("token"))}
         setSuggestions={setLocationSuggestion}
       />
 

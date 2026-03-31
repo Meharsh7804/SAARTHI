@@ -236,3 +236,18 @@ module.exports.getNearbySafePlaces = async (ltd, lng, radius = 2000) => {
     return []; // fallback to empty array
   }
 };
+
+module.exports.getRouteSafetyScores = async (segments) => {
+  // Mock safety scores (0-10)
+  // Stable "random" based on coords for consistency
+  return segments.map(seg => {
+    const seed = (seg.lat * 10000 + seg.lng * 10000) % 1;
+    // To make it look real, use a weighted random or area based if possible
+    // Let's just use semi-stable random for mock
+    const pseudoRandom = Math.abs(Math.sin(seg.lat * 12.9898 + seg.lng * 78.233)) * 10;
+    return {
+      ...seg,
+      safety_score: Math.floor(pseudoRandom % 11)
+    };
+  });
+};

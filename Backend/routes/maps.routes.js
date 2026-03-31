@@ -28,4 +28,9 @@ router.get('/safe-places',
     mapController.getSafePlaces
 )
 
+router.post('/route-safety',
+    authMiddleware.authUser,
+    mapController.getRouteSafety
+)
+
 module.exports = router;

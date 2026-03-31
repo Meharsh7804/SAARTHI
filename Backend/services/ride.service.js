@@ -3,6 +3,7 @@ const rideModel = require("../models/ride.model");
 const mapService = require("./map.service");
 const crypto = require("crypto");
 const safetyService = require("./safety.service");
+const rideHistoryModel = require("../models/rideHistory.model");
 
 const getFare = async (pickup, destination) => {
   if (!pickup || !destination) {
@@ -65,12 +66,17 @@ module.exports.getFareWithRoutes = async (pickup, destination) => {
         const leg = route.legs[0];
         const distanceValue = leg.distance.value;
         const durationValue = leg.duration.value;
-        const { safetyScore, isNight, hasHighRiskArea } = safetyService.calculateRouteSafety(route);
+        
+        const segments = safetyService.getSegmentSafetyScores(leg.steps);
+        const metrics = safetyService.computeRouteSafetyMetrics(segments);
+        const safetyScore = metrics.finalScore;
+
+        const { isNight, hasHighRiskArea } = safetyService.calculateRouteSafety(route);
 
         const suggestion = generateSuggestion({ 
             distance: distanceValue, 
             duration: durationValue, 
-            safetyScore, 
+            safetyScore: safetyScore * 10, // scale back to 100 for old logic compatibility if needed
             isNight, 
             hasHighRiskArea 
         });
@@ -90,7 +96,9 @@ module.exports.getFareWithRoutes = async (pickup, destination) => {
             distance: leg.distance,
             duration: leg.duration,
             safetyScore,
-            suggestion,         // Return the generated AI suggestion
+            unsafeLengthRatio: metrics.unsafeLengthRatio,
+            segments,
+            suggestion,
             polyline: route.overview_polyline.points,
             summary: route.summary
         };
@@ -105,10 +113,14 @@ module.exports.getFareWithRoutes = async (pickup, destination) => {
         prev.duration.value < curr.duration.value ? prev : curr
     );
 
-    // Find Safest
-    const safest = processedRoutes.reduce((prev, curr) =>
-        prev.safetyScore > curr.safetyScore ? prev : curr
-    );
+    // Find Safest - Part 1, Task 4: Compare multiple routes
+    const safest = processedRoutes.reduce((prev, curr) => {
+        const scoreDiff = Math.abs(prev.safetyScore - curr.safetyScore);
+        if (scoreDiff <= 0.5) { // Using 0.5 as ±5% of 10
+            return prev.unsafeLengthRatio < curr.unsafeLengthRatio ? prev : curr;
+        }
+        return prev.safetyScore > curr.safetyScore ? prev : curr;
+    });
 
     // Pricing Logic: Safest route price = base_price + ₹2 to ₹3 extra
     // We apply this extra cost to the 'safest' route's fare
@@ -162,6 +174,16 @@ module.exports.createRide = async ({
       selectedRouteType: selectedRouteMode,
       genderPreference: genderPreference || 'any'
     });
+
+    // Update RideHistory
+    const existingHistory = await rideHistoryModel.findOne({ user, pickup, destination });
+    if (existingHistory) {
+      existingHistory.count += 1;
+      existingHistory.lastBookedAt = Date.now();
+      await existingHistory.save();
+    } else {
+      await rideHistoryModel.create({ user, pickup, destination, count: 1 });
+    }
 
     return ride;
   } catch (error) {

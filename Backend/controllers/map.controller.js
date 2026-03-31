@@ -69,3 +69,19 @@ module.exports.getSafePlaces = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+module.exports.getRouteSafety = async (req, res) => {
+  try {
+    const { segments } = req.body;
+    
+    if (!segments || !Array.isArray(segments)) {
+        return res.status(400).json({ message: "Segments (array) are required" });
+    }
+
+    const scores = await mapService.getRouteSafetyScores(segments);
+    
+    res.status(200).json({ segments: scores });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};

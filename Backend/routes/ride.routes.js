@@ -55,5 +55,9 @@ router.post('/end-ride',
     rideController.endRide
 )
 
+router.get('/usual-ride',
+    authMiddleware.authUser,
+    rideController.getUsualRide
+)
 
 module.exports = router;

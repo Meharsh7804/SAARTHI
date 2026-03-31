@@ -98,7 +98,12 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
     } catch (err) {
       const msg = err.response?.data?.message || err.message || "Something went wrong";
       console.error("[Saarthi AI] Error:", msg);
-      setAiError(msg);
+      // We check if it's agentic warning
+      if (err.response?.data?.message && err.response?.data?.extracted) {
+        setAiResult(err.response.data);
+      } else {
+        setAiError(msg);
+      }
       setAiStep("error");
     } finally {
       setAiLoading(false);
@@ -297,83 +302,142 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
 
             {aiStep === "result" && aiResult && (
               <div className="space-y-4">
-                {/* Success badge */}
-                <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl p-3">
-                  <CheckCircle size={18} className="text-green-600 flex-shrink-0" />
-                  <p className="text-xs font-bold text-green-800">AI understood your request!</p>
-                </div>
-
-                {/* Extracted data */}
-                <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-100">
-                  {aiResult.plan.destination && aiResult.plan.originalDestinationQuery && aiResult.plan.destination !== aiResult.plan.originalDestinationQuery ? (
-                    <div className="flex flex-col gap-2">
-                       <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Detected</span>
-                        <span className="text-sm font-bold text-zinc-900 text-right">{aiResult.plan.originalDestinationQuery}</span>
+                {aiResult.isUsualRide ? (
+                  <>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles size={18} className="text-emerald-600" />
+                        <h3 className="font-bold text-emerald-900">Habit Detected</h3>
                       </div>
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Matched Location</span>
-                        <span className="text-sm font-bold text-violet-600 text-right max-w-[200px] truncate">{aiResult.plan.destination.split(',')[0]}</span>
+                      <p className="text-sm font-medium text-emerald-800 leading-relaxed">
+                        {aiResult.agentMessage}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-white border rounded-xl p-4 shadow-sm">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase">Pickup Location</p>
+                      <p className="text-sm font-bold text-zinc-900 mb-1 truncate">{aiResult.usualRideData.pickup}</p>
+                      
+                      <div className="h-6 border-l-2 ml-1.5 my-1 border-dashed border-zinc-200"></div>
+                      
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase">Destination</p>
+                      <p className="text-sm font-bold text-zinc-900 truncate">{aiResult.usualRideData.destination}</p>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => { setAiStep("input"); setAiResult(null); }}
+                        className="flex-1 py-3.5 rounded-2xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
+                      >
+                        Different Ride
+                      </button>
+                      <button
+                        onClick={() => {
+                          const time = new Date(Date.now() + 30 * 60000).toTimeString().slice(0, 5); // Default +30m
+                          onStartAutoBooking({ 
+                            pickup: aiResult.usualRideData.pickup, 
+                            destination: aiResult.usualRideData.destination, 
+                            arrivalTime: time 
+                          });
+                        }}
+                        className="flex-[2] py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all"
+                      >
+                        Yes, Book Now
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Success badge */}
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl p-3">
+                      <CheckCircle size={18} className="text-green-600 flex-shrink-0" />
+                      <p className="text-xs font-bold text-green-800">AI understood your request!</p>
+                    </div>
+
+                    {/* Extracted data */}
+                    <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-100">
+                      {aiResult.plan.destination && aiResult.plan.originalDestinationQuery && aiResult.plan.destination !== aiResult.plan.originalDestinationQuery ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Detected</span>
+                            <span className="text-sm font-bold text-zinc-900 text-right">{aiResult.plan.originalDestinationQuery}</span>
+                          </div>
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Matched Location</span>
+                            <span className="text-sm font-bold text-violet-600 text-right max-w-[200px] truncate">{aiResult.plan.destination.split(',')[0]}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Destination</span>
+                          <span className="text-sm font-bold text-zinc-900 truncate max-w-[200px] text-right">{aiResult.plan.destination || aiResult.extracted.drop}</span>
+                        </div>
+                      )}
+                      
+                      {aiResult.agentInfo?.message && (
+                        <>
+                          <div className="h-px bg-zinc-200" />
+                          <div className="flex justify-between items-start gap-4">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pt-0.5 whitespace-nowrap">Agent Insight</span>
+                            <span className="text-xs font-semibold text-blue-700 text-right leading-relaxed bg-blue-50/50 p-2 rounded-lg border border-blue-100/50">{aiResult.agentInfo.message}</span>
+                          </div>
+                        </>
+                      )}
+
+                      <div className="h-px bg-zinc-200" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Arrival Time</span>
+                        <span className="text-sm font-bold text-zinc-900">{aiResult.plan.arrivalTimeFormatted}</span>
+                      </div>
+                      <div className="h-px bg-zinc-200" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Travel Time</span>
+                        <span className="text-sm font-bold text-zinc-900">{aiResult.plan.travelTimeMinutes} min</span>
+                      </div>
+                      <div className="h-px bg-zinc-200" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ride Booking At</span>
+                        <span className="text-sm font-extrabold text-blue-600">{aiResult.plan.bookingTimeFormatted}</span>
+                      </div>
+                      <div className="h-px bg-zinc-200" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Source</span>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          aiResult.extracted.source === "ner" 
+                            ? "bg-purple-100 text-purple-700" 
+                            : "bg-orange-100 text-orange-700"
+                        }`}>
+                          {aiResult.extracted.source === "ner" ? "spaCy NER" : "Transformer"}
+                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Destination</span>
-                      <span className="text-sm font-bold text-zinc-900 truncate max-w-[200px] text-right">{aiResult.plan.destination || aiResult.extracted.drop}</span>
-                    </div>
-                  )}
-                  <div className="h-px bg-zinc-200" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Arrival Time</span>
-                    <span className="text-sm font-bold text-zinc-900">{aiResult.plan.arrivalTimeFormatted}</span>
-                  </div>
-                  <div className="h-px bg-zinc-200" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Travel Time</span>
-                    <span className="text-sm font-bold text-zinc-900">{aiResult.plan.travelTimeMinutes} min</span>
-                  </div>
-                  <div className="h-px bg-zinc-200" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ride Booking At</span>
-                    <span className="text-sm font-extrabold text-blue-600">{aiResult.plan.bookingTimeFormatted}</span>
-                  </div>
-                  <div className="h-px bg-zinc-200" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Source</span>
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                      aiResult.extracted.source === "ner" 
-                        ? "bg-purple-100 text-purple-700" 
-                        : "bg-orange-100 text-orange-700"
-                    }`}>
-                      {aiResult.extracted.source === "ner" ? "spaCy NER" : "Transformer"}
-                    </span>
-                  </div>
-                </div>
 
-                {aiResult.plan.bookNow && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
-                    <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-800 font-medium">
-                      Booking time has already passed — ride will be booked <strong>immediately</strong>.
-                    </p>
-                  </div>
+                    {aiResult.plan.bookNow && (
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
+                        <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-800 font-medium">
+                          Booking time has already passed — ride will be booked <strong>immediately</strong>.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setAiStep("input"); setAiResult(null); }}
+                        className="flex-1 py-3 rounded-2xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
+                      >
+                        Try Again
+                      </button>
+                      <button
+                        onClick={handleAIConfirm}
+                        className="flex-[2] py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98] transition-all"
+                      >
+                        Confirm & Book
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </>
                 )}
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setAiStep("input"); setAiResult(null); }}
-                    className="flex-1 py-3 rounded-2xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
-                  >
-                    Try Again
-                  </button>
-                  <button
-                    onClick={handleAIConfirm}
-                    className="flex-[2] py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98] transition-all"
-                  >
-                    Confirm & Book
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
               </div>
             )}
 

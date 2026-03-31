@@ -338,3 +338,29 @@ module.exports.cancelRide = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+const rideHistoryModel = require("../models/rideHistory.model");
+
+module.exports.getUsualRide = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.user?._id;
+    if (!userId) {
+      return res.status(400).json({ message: "User ID required" });
+    }
+
+    const history = await rideHistoryModel.find({ user: userId })
+      .sort({ count: -1, lastBookedAt: -1 })
+      .limit(2);
+
+    if (history.length > 0 && history[0].count >= 3) {
+      return res.status(200).json({
+        hasFrequentRide: true,
+        frequentRides: history
+      });
+    }
+
+    return res.status(200).json({ hasFrequentRide: false });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

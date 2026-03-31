@@ -87,7 +87,7 @@ function CaptainHomeScreen() {
           { rideId: newRide._id },
           {
             headers: {
-              token: token,
+              token: localStorage.getItem("token"),
             },
           }
         );
@@ -123,7 +123,7 @@ function CaptainHomeScreen() {
           { rideId: newRide._id },
           {
             headers: {
-              token: token,
+              token: localStorage.getItem("token"),
             },
           }
         );
@@ -146,7 +146,7 @@ function CaptainHomeScreen() {
           `${import.meta.env.VITE_SERVER_URL}/ride/start-ride?rideId=${newRide._id}&otp=${otp}`,
           {
             headers: {
-              token: token,
+              token: localStorage.getItem("token"),
             },
           }
         );
@@ -178,7 +178,7 @@ function CaptainHomeScreen() {
           },
           {
             headers: {
-              token: token,
+              token: localStorage.getItem("token"),
             },
           }
         );

@@ -65,4 +65,74 @@ module.exports.calculateRouteSafety = (route) => {
     return { safetyScore: baseScore, isNight, hasHighRiskArea };
 };
 
-module.exports.getSafetyData = () => safetyData;
+module.exports.getSegmentSafetyScores = (steps) => {
+    return steps.map(step => {
+        let score = 7; // Default "Good"
+        const instructions = (step.html_instructions || "").toLowerCase();
+        
+        // Match against safetyData (Nagpur specific)
+        safetyData.forEach(item => {
+            if (instructions.includes(item.area.toLowerCase())) {
+                score = Math.round(parseInt(item.safety_score) / 10);
+            }
+        });
+
+        // Time of day penalty (0-10 scale)
+        const currentHour = new Date().getHours();
+        const isNight = currentHour >= 22 || currentHour <= 5;
+        if (isNight && score > 2) score -= 1;
+
+        return {
+            start: step.start_location,
+            end: step.end_location,
+            polyline: step.polyline.points,
+            distance: step.distance.value,
+            safety_score: Math.max(0, Math.min(10, score))
+        };
+    });
+};
+
+/**
+ * Part 1: Safety-Based Route Scoring
+ */
+module.exports.computeRouteSafetyMetrics = (segments) => {
+    if (!segments || segments.length === 0) return { finalScore: 0 };
+
+    let totalLength = 0;
+    let weightedSafetySum = 0;
+    let totalUnsafeLength = 0;
+    let maxUnsafeStretch = 0;
+    let currentUnsafeStretch = 0;
+
+    segments.forEach(seg => {
+        const length = seg.distance;
+        totalLength += length;
+        weightedSafetySum += length * seg.safety_score;
+
+        if (seg.safety_score < 4) {
+            totalUnsafeLength += length;
+            currentUnsafeStretch += length;
+            if (currentUnsafeStretch > maxUnsafeStretch) {
+                maxUnsafeStretch = currentUnsafeStretch;
+            }
+        } else {
+            currentUnsafeStretch = 0;
+        }
+    });
+
+    const weightedSafety = weightedSafetySum / totalLength;
+    const unsafeLengthRatio = totalUnsafeLength / totalLength;
+    
+    // finalScore = weightedSafety - (0.5 * unsafeLengthRatio * 10) - (0.3 * (maxUnsafeStretch / totalLength) * 10)
+    const finalScore = weightedSafety 
+                     - (0.5 * unsafeLengthRatio * 10) 
+                     - (0.3 * (maxUnsafeStretch / totalLength) * 10);
+
+    return {
+        weightedSafety,
+        unsafeLengthRatio,
+        maxUnsafeStretch,
+        finalScore: Math.max(0, Math.min(10, parseFloat(finalScore.toFixed(2)))),
+        totalLength
+    };
+};

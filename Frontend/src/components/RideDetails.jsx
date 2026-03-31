@@ -100,19 +100,30 @@ function RideDetails({
 
             {confirmedRideData?._id && (
               <div className="leading-4 text-right">
-                <h1 className="text-sm font-semibold">
-                  {confirmedRideData?.captain?.fullname?.firstname}{" "}
-                  {confirmedRideData?.captain?.fullname?.lastname}
-                </h1>
+                <div className="flex flex-col items-end gap-1 mb-2">
+                  <h1 className="text-sm font-semibold">
+                    {confirmedRideData?.captain?.fullname?.firstname}{" "}
+                    {confirmedRideData?.captain?.fullname?.lastname}
+                  </h1>
+                  <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter border ${
+                    confirmedRideData.safetyScore >= 7 ? "bg-green-50 text-green-600 border-green-200" : 
+                    confirmedRideData.safetyScore >= 4 ? "bg-yellow-50 text-yellow-600 border-yellow-200" : 
+                    "bg-red-50 text-red-600 border-red-200"
+                  }`}>
+                    {confirmedRideData.safetyScore >= 7 ? "Safe Route" : 
+                     confirmedRideData.safetyScore >= 4 ? "Moderate Risk" : 
+                     "High Risk Area"}
+                  </div>
+                </div>
                 <div className="flex items-center justify-end gap-1 mt-0.5">
                   <span className="text-xs font-bold text-yellow-600">
                     ⭐ {confirmedRideData?.captain?.avgSafetyScore || "N/A"}{" "}
-                    Safety Rating
                   </span>
-                  {confirmedRideData?.captain?.avgSafetyScore > 4 && (
-                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold border border-green-200">
-                      Highly Rated
-                    </span>
+                  {rideStatus === "ongoing" && (
+                    <div className="flex gap-2 ml-2">
+                         <span className="text-[10px] font-bold text-zinc-400">{confirmedRideData.duration?.text || '12 mins'}</span>
+                         <span className="text-[10px] font-bold text-zinc-400">{confirmedRideData.distance?.text || '4.2 km'}</span>
+                    </div>
                   )}
                 </div>
                 <h1 className="font-medium text-sm mt-1">
@@ -123,9 +134,11 @@ function RideDetails({
                   {confirmedRideData?.captain?.vehicle?.color}{" "}
                   {confirmedRideData?.captain?.vehicle?.type}
                 </h1>
-                <span className="mt-2 inline-block bg-black text-white px-3 py-1 rounded-lg text-sm font-bold">
-                  OTP: {confirmedRideData?.otp}
-                </span>
+                {rideStatus !== "ongoing" && (
+                  <span className="mt-2 inline-block bg-black text-white px-3 py-1 rounded-lg text-sm font-bold">
+                    OTP: {confirmedRideData?.otp}
+                  </span>
+                )}
               </div>
             )}
           </div>

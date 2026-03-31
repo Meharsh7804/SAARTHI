@@ -13,6 +13,7 @@
 
 const axios = require("axios");
 const mapService = require("../services/map.service");
+const rideAgent = require("../agent/rideAgent");
 
 // Python AI service URL (FastAPI on port 8001)
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8001";
@@ -39,112 +40,81 @@ module.exports.extractAndPlan = async (req, res) => {
   }
 
   try {
-    // ── Step 1: Call Python AI Service ────────────────────────
-    console.log("[Saarthi AI] Sending prompt to AI service:", prompt);
-
-    let aiResponse;
-    try {
-      aiResponse = await axios.post(`${AI_SERVICE_URL}/extract`, {
-        text: prompt,
-      }, { timeout: 10000 });
-    } catch (aiErr) {
-      console.error("[Saarthi AI] AI Service unreachable:", aiErr.message);
-      return res.status(503).json({
-        message: "AI Service is not running. Please start the Python AI server (uvicorn).",
-        error: aiErr.message,
-      });
-    }
-
-    const { time, drop, source, details } = aiResponse.data;
-    console.log("[Saarthi AI] AI Response Received:", { time, drop, source });
-
-    // ── Step 2: Validate extraction ──────────────────────────
-    if (!time || !drop) {
-      return res.status(422).json({
-        message: "Could not understand your request. Please try again with clearer input.",
-        extracted: { time, drop, source },
-      });
-    }
-
-    // ── Step 2.5: Smart Location Matching ────────────────────
-    console.log(`[Saarthi AI] Resolving location for "${drop}" biased by pickup "${pickup}"`);
-    let resolvedDrop = await mapService.resolveSmartLocation(drop, pickup);
+    const userContext = { userId: req.user._id, pickup };
     
-    if (resolvedDrop) {
-      console.log(`[Saarthi AI] Resolved to: "${resolvedDrop}"`);
-    } else {
-      console.log(`[Saarthi AI] Could not auto-resolve "${drop}". Falling back to raw extraction.`);
-      resolvedDrop = drop;
+    // ── Call Agent Workflow ──────────────────────────────
+    const agentResponse = await rideAgent.processRequest(prompt, userContext);
+
+    if (agentResponse.isUsualRideSuggestion) {
+       return res.status(200).json({
+          success: true,
+          isUsualRide: true,
+          agentMessage: agentResponse.agentResponse,
+          usualRideData: agentResponse.usualRideData
+       });
     }
 
-    // ── Step 3: Parse arrival time ───────────────────────────
+    if (agentResponse.needsMoreInfo || agentResponse.failed) {
+       return res.status(422).json({
+          message: agentResponse.agentResponse || "Could not process request",
+          extracted: agentResponse.extracted
+       });
+    }
+
+    const { planDetails, bestOption, nearbySafePlaces, extracted } = agentResponse;
+    const time = planDetails.extractionTime;
+
+    // ── Time Parsing & Booking Time Calculation ─────────
     const arrivalTime = parseTimeString(time);
-    if (!arrivalTime) {
-      return res.status(422).json({
-        message: `Could not parse time "${time}". Please use formats like "9:30", "10 AM", etc.`,
-        extracted: { time, drop, source },
-      });
-    }
+    let arrivalDate = new Date();
+    let bookingTime = new Date();
+    let bookNow = true;
+    let travelTimeMinutes = 25;
+    let BUFFER_MINUTES = 5;
 
-    // ── Step 4: Get travel time via Google Maps ──────────────
-    console.log("[Saarthi AI] Fetching travel time:", pickup, "→", resolvedDrop);
-    
-    let travelTimeMinutes = 25; // default fallback
-    try {
-      const distData = await mapService.getDistanceTime(pickup, resolvedDrop);
-      if (distData && distData.duration && distData.duration.value) {
-        travelTimeMinutes = Math.ceil(distData.duration.value / 60);
+    if (arrivalTime) {
+      const now = new Date();
+      arrivalDate = new Date(
+        now.getFullYear(), now.getMonth(), now.getDate(),
+        arrivalTime.hours, arrivalTime.minutes
+      );
+      if (arrivalDate < now) {
+        arrivalDate.setDate(arrivalDate.getDate() + 1);
       }
-    } catch (mapErr) {
-      console.warn("[Saarthi AI] Maps API failed, using default travel time:", mapErr.message);
+
+      const distData = bestOption.routeData.route.legs[0];
+      travelTimeMinutes = Math.ceil(distData.duration.value / 60);
+
+      const totalLeadTime = travelTimeMinutes + BUFFER_MINUTES;
+      bookingTime = new Date(arrivalDate.getTime() - totalLeadTime * 60000);
+      bookNow = bookingTime <= now;
     }
 
-    // ── Step 5: Calculate booking time ───────────────────────
-    const BUFFER_MINUTES = 5;
-    const now = new Date();
-    const arrivalDate = new Date(
-      now.getFullYear(), now.getMonth(), now.getDate(),
-      arrivalTime.hours, arrivalTime.minutes
-    );
-
-    // If arrival time has passed today, assume tomorrow
-    if (arrivalDate < now) {
-      arrivalDate.setDate(arrivalDate.getDate() + 1);
-    }
-
-    const totalLeadTime = travelTimeMinutes + BUFFER_MINUTES;
-    const bookingTime = new Date(arrivalDate.getTime() - totalLeadTime * 60000);
-
-    const bookNow = bookingTime <= now;
-
-    console.log("[Saarthi AI] Plan computed:");
-    console.log(`  Arrival Time   : ${arrivalDate.toLocaleTimeString()}`);
-    console.log(`  Travel Time    : ${travelTimeMinutes} min`);
-    console.log(`  Buffer         : ${BUFFER_MINUTES} min`);
-    console.log(`  Booking Time   : ${bookingTime.toLocaleTimeString()}`);
-    console.log(`  Book Now       : ${bookNow}`);
-
-    // ── Step 6: Return structured plan ───────────────────────
+    // ── Return structured plan ───────────────────────
     return res.status(200).json({
       success: true,
-      extracted: {
-        time: time,
-        drop: drop,
-        source: source,
+      extracted: extracted,
+      agentInfo: {
+        message: agentResponse.agentResponse,
+        intent: planDetails.intentDetected,
+        goal: planDetails.goalActive,
+        riskLevel: bestOption.riskLevel,
+        safePlaces: nearbySafePlaces
       },
       plan: {
-        pickup: pickup,
-        destination: resolvedDrop,           // <-- SMART MATCH
-        originalDestinationQuery: drop, // <-- KEEP ORIGINAL ALIVE 
-        arrivalTime: arrivalDate.toISOString(),
-        arrivalTimeFormatted: arrivalDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        pickup: planDetails.pickup,
+        destination: planDetails.destination,
+        originalDestinationQuery: extracted.drop,
+        arrivalTime: arrivalTime ? arrivalDate.toISOString() : null,
+        arrivalTimeFormatted: arrivalTime ? arrivalDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : null,
         travelTimeMinutes: travelTimeMinutes,
         bufferMinutes: BUFFER_MINUTES,
-        bookingTime: bookingTime.toISOString(),
-        bookingTimeFormatted: bookingTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        bookingTime: arrivalTime ? bookingTime.toISOString() : null,
+        bookingTimeFormatted: arrivalTime ? bookingTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : null,
         bookNow: bookNow,
+        routeType: bestOption.bestRouteType
       },
-      details: details,
+      details: extracted.details,
     });
 
   } catch (err) {

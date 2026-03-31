@@ -16,12 +16,17 @@ const RouteSelector = ({ selectedMode, onSelect, fastest, safest, onBack }) => {
       <div className="flex gap-2 p-4 pt-2">
         <div 
           onClick={() => onSelect('fastest')}
-          className={`flex-1 flex flex-col items-center p-3 rounded-2xl border-2 transition-all cursor-pointer ${
+          className={`flex-1 flex flex-col items-center p-3 rounded-2xl border-2 transition-all cursor-pointer relative ${
             selectedMode === 'fastest' 
               ? 'border-blue-600 bg-blue-50 shadow-md' 
               : 'border-transparent bg-zinc-100 hover:bg-zinc-200'
           }`}
         >
+          <div className={`absolute -top-1 -right-1 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 z-10 ${
+            fastest?.safetyScore >= 70 ? 'bg-green-600' : fastest?.safetyScore >= 40 ? 'bg-yellow-600' : 'bg-red-600'
+          }`}>
+            Safety: {(fastest?.safetyScore / 10).toFixed(1)}
+          </div>
           <Zap className={`${selectedMode === 'fastest' ? 'text-blue-600' : 'text-zinc-400'} mb-1`} size={20} />
           <span className="text-xs font-bold">FASTEST</span>
           <span className="text-xs text-zinc-500 font-medium">{fastest?.duration.text || '--'}</span>
@@ -36,11 +41,16 @@ const RouteSelector = ({ selectedMode, onSelect, fastest, safest, onBack }) => {
           }`}
         >
           <div className="absolute -top-1 -right-1 bg-green-600 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 z-10">
-            Safe 🛡️
+            Safety: {(safest?.safetyScore / 10).toFixed(1)} 🛡️
           </div>
           <ShieldCheck className={`${selectedMode === 'safest' ? 'text-green-600' : 'text-zinc-400'} mb-1`} size={20} />
           <span className="text-xs font-bold">SAFEST</span>
           <span className="text-xs text-zinc-500 font-medium">{safest?.duration.text || '--'}</span>
+          {safest?.duration.value > fastest?.duration.value && (
+            <span className="text-[8px] text-green-700 font-bold mt-1">
+              +{Math.ceil((safest.duration.value - fastest.duration.value)/60)} mins for safety
+            </span>
+          )}
         </div>
       </div>
     </div>
