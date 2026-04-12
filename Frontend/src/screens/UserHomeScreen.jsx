@@ -15,7 +15,7 @@ import {
   SaarthiAIModal,
 } from "../components";
 import { getSafetySuggestion, getSafePlaces, calculateBookingTime } from "../utils/aiAssistant";
-import { Sparkles } from "lucide-react";
+import { Sparkles, PhoneCall, ShieldAlert } from "lucide-react";
 import axios from "axios";
 import debounce from "lodash.debounce";
 import { SocketDataContext } from "../contexts/SocketContext";
@@ -73,6 +73,41 @@ function UserHomeScreen() {
   const [autoBookingMessage, setAutoBookingMessage] = useState("");
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [usualRide, setUsualRide] = useState(null);
+
+  // SOS Button State
+  const [sosHolding, setSosHolding] = useState(false);
+  const [sosProgress, setSosProgress] = useState(0);
+  const sosTimerRef = useRef(null);
+  const sosProgressRef = useRef(null);
+
+  const handleSosStart = () => {
+    setSosHolding(true);
+    setSosProgress(0);
+    const start = Date.now();
+    const duration = 2000; // 2 seconds hold
+    sosProgressRef.current = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min((elapsed / duration) * 100, 100);
+      setSosProgress(pct);
+      if (pct >= 100) {
+        clearInterval(sosProgressRef.current);
+        clearTimeout(sosTimerRef.current);
+        setSosHolding(false);
+        setSosProgress(0);
+        window.location.href = 'tel:112';
+      }
+    }, 30);
+    sosTimerRef.current = setTimeout(() => {
+      clearInterval(sosProgressRef.current);
+    }, duration + 100);
+  };
+
+  const handleSosEnd = () => {
+    setSosHolding(false);
+    setSosProgress(0);
+    clearInterval(sosProgressRef.current);
+    clearTimeout(sosTimerRef.current);
+  };
 
   useEffect(() => {
     const fetchUsualRide = async () => {
@@ -623,6 +658,55 @@ function UserHomeScreen() {
       >
         <Sparkles size={24} className={`${rideMode === "female-only" ? "text-pink-600" : "text-blue-600"} transition-colors group-hover:opacity-80`} />
       </button>
+
+      {/* 🆘 SOS Emergency Button — visible only during active ride */}
+      {rideStatus === "ongoing" && (
+        <div className="absolute left-4 bottom-[24vh] z-[200] flex flex-col items-center gap-1.5">
+          {/* Instruction label */}
+          <div className={`text-[10px] font-bold text-white px-2 py-0.5 rounded-full transition-all duration-300 ${
+            sosHolding ? "bg-red-600 animate-pulse" : "bg-red-500/80"
+          }`}>
+            {sosHolding ? `Calling 112...` : "Hold for SOS"}
+          </div>
+
+          {/* SOS Button */}
+          <div className="relative">
+            {/* Progress ring */}
+            <svg
+              className="absolute inset-0 -rotate-90 pointer-events-none"
+              width="72" height="72" viewBox="0 0 72 72"
+            >
+              <circle
+                cx="36" cy="36" r="32"
+                fill="none"
+                stroke="#fca5a5"
+                strokeWidth="4"
+                strokeDasharray={`${2 * Math.PI * 32}`}
+                strokeDashoffset={`${2 * Math.PI * 32 * (1 - sosProgress / 100)}`}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 0.03s linear' }}
+              />
+            </svg>
+
+            <button
+              onMouseDown={handleSosStart}
+              onMouseUp={handleSosEnd}
+              onMouseLeave={handleSosEnd}
+              onTouchStart={handleSosStart}
+              onTouchEnd={handleSosEnd}
+              className={`relative w-[72px] h-[72px] rounded-full flex flex-col items-center justify-center gap-0.5 shadow-2xl select-none transition-all duration-150 ${
+                sosHolding
+                  ? "bg-red-600 scale-95 shadow-red-400/60"
+                  : "bg-red-500 hover:bg-red-600 active:scale-95 shadow-red-400/40"
+              }`}
+              title="Hold 2 seconds to call police"
+            >
+              <ShieldAlert size={22} className="text-white" />
+              <span className="text-white text-[10px] font-black tracking-wider">SOS</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Floating AI Suggestions Popup */}
       {showAISuggestions && aiSuggestions && (
