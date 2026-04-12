@@ -38,7 +38,7 @@ NER_MODEL_DIR   = BASE_DIR / "ner_model"
 TRANS_MODEL_DIR = BASE_DIR / "transformer_model"
 
 # ── BIO label mapping ─────────────────────────────────────
-ID2LABEL = {0: "O", 1: "B-TIME", 2: "I-TIME", 3: "B-DROP", 4: "I-DROP"}
+ID2LABEL = {0: "O", 1: "B-TIME", 2: "I-TIME", 3: "B-DROP", 4: "I-DROP", 5: "B-PREFERENCE", 6: "I-PREFERENCE"}
 
 
 # ══════════════════════════════════════════════════════════
@@ -132,6 +132,7 @@ class ExtractResponse(BaseModel):
     text   : str
     time   : Optional[str]
     drop   : Optional[str]
+    preference : Optional[str]
     source : str          # "ner" | "transformer" | "none"
     details: dict
 
@@ -195,12 +196,12 @@ def expand_drop_span(text: str, start_char: int, end_char: int) -> str:
 
 
 def ner_extract(text: str) -> dict:
-    """Extract TIME and DROP using spaCy NER with POS expansion."""
+    """Extract TIME, DROP and PREFERENCE using spaCy NER with POS expansion."""
     if ner_nlp is None:
-        return {"time": None, "drop": None, "expanded": False}
+        return {"time": None, "drop": None, "preference": None, "expanded": False}
 
     doc = ner_nlp(text)
-    result = {"time": None, "drop": None, "expanded": False}
+    result = {"time": None, "drop": None, "preference": None, "expanded": False}
     for ent in doc.ents:
         if ent.label_ == "TIME" and result["time"] is None:
             result["time"] = ent.text
@@ -210,6 +211,8 @@ def ner_extract(text: str) -> dict:
             result["drop"] = expanded
             if expanded != original:
                 result["expanded"] = True
+        elif ent.label_ == "PREFERENCE" and result["preference"] is None:
+            result["preference"] = ent.text
     return result
 
 
@@ -242,22 +245,38 @@ def transformer_extract(text: str) -> dict:
 
     time_tokens = []
     drop_tokens = []
+    pref_tokens = []
     for wid in sorted(word_preds):
         label = word_preds[wid]
         if label in ("B-TIME", "I-TIME"):
             time_tokens.append(words[wid])
         elif label in ("B-DROP", "I-DROP"):
             drop_tokens.append(words[wid])
+        elif label in ("B-PREFERENCE", "I-PREFERENCE"):
+            pref_tokens.append(words[wid])
 
     return {
         "time": " ".join(time_tokens) if time_tokens else None,
         "drop": " ".join(drop_tokens) if drop_tokens else None,
+        "preference": " ".join(pref_tokens) if pref_tokens else None,
     }
 
 
 # ══════════════════════════════════════════════════════════
 # HYBRID LOGIC
 # ══════════════════════════════════════════════════════════
+
+import re
+
+def normalize_time(t: str) -> Optional[str]:
+    if not t: return t
+    t = re.sub(r'(\d{1,2})\s+(\d{2})', r'\1:\2', t)
+    t = t.replace('.', ':').strip()
+    return t
+
+def clean_location(loc: str) -> Optional[str]:
+    if not loc: return loc
+    return loc.strip().title()
 
 def hybrid_extract(text: str) -> dict:
     """
@@ -274,8 +293,9 @@ def hybrid_extract(text: str) -> dict:
 
     if ner_complete:
         return {
-            "time"   : ner_result["time"],
-            "drop"   : ner_result["drop"],
+            "time"   : normalize_time(ner_result["time"]),
+            "drop"   : clean_location(ner_result["drop"]),
+            "preference" : ner_result["preference"] or trans_result.get("preference"),
             "source" : "ner-expanded" if ner_result.get("expanded") else "ner",
             "details": {
                 "ner_result"        : ner_result,
@@ -286,14 +306,16 @@ def hybrid_extract(text: str) -> dict:
         }
 
     # Fallback / merge
-    merged_time = ner_result["time"] or trans_result["time"]
-    merged_drop = ner_result["drop"] or trans_result["drop"]
+    merged_time = ner_result["time"] or trans_result.get("time")
+    merged_drop = ner_result["drop"] or trans_result.get("drop")
+    merged_pref = ner_result.get("preference") or trans_result.get("preference")
 
     source = "transformer" if (ner_result["time"] is None and ner_result["drop"] is None) else "hybrid"
 
     return {
-        "time"   : merged_time,
-        "drop"   : merged_drop,
+        "time"   : normalize_time(merged_time),
+        "drop"   : clean_location(merged_drop),
+        "preference": merged_pref,
         "source" : source,
         "details": {
             "ner_result"        : ner_result,
@@ -357,6 +379,7 @@ def extract(req: ExtractRequest):
         text   = req.text,
         time   = result["time"],
         drop   = result["drop"],
+        preference = result.get("preference"),
         source = result["source"],
         details= result["details"],
     )

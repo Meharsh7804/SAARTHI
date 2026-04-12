@@ -37,12 +37,16 @@ class RideAgent {
       console.warn("[RideAgent] Fallback NER failed", err.message);
     }
 
-    // Rules-based intent
+    // Rules-based intent, also using neural extraction
     let intent = "book_ride";
-    if (query.includes("safe") || query.includes("secure") || query.includes("protect")) {
+    const pref = extraction.preference ? extraction.preference.toLowerCase() : "";
+    
+    if (pref.includes("safe") || query.includes("safe") || query.includes("secure") || query.includes("protect")) {
       intent = "safest_route";
-    } else if (query.includes("fast") || query.includes("quick") || query.includes("hurry")) {
+    } else if (pref.includes("fast") || pref.includes("jaldi") || query.includes("fast") || query.includes("quick") || query.includes("hurry") || query.includes("urgent")) {
       intent = "quick_ride";
+    } else if (pref.includes("cheap")) {
+      intent = "cheapest_ride";
     }
 
     return { extraction, intent };
@@ -53,7 +57,8 @@ class RideAgent {
     const map = {
       book_ride: "complete ride booking",
       safest_route: "find safest route",
-      quick_ride: "find fastest route"
+      quick_ride: "find fastest route",
+      cheapest_ride: "find cheapest ride"
     };
     return map[intent] || "complete ride booking";
   }
@@ -106,29 +111,47 @@ class RideAgent {
          const fastest = [...context.safetyData].sort((a,b) => a.route.legs[0].duration.value - b.route.legs[0].duration.value)[0];
          const safest = [...context.safetyData].sort((a,b) => b.safetyScore - a.safetyScore)[0];
          
+         // Mock Weather & Traffic Data
+         const isRaining = Math.random() > 0.8; // 20% chance of rain
+         const isHighTraffic = fastest.route.legs[0].duration.value > 1800; // >30m
+
+         let bestRouteType = "optimal";
+         let routeData = safest.safetyScore > 50 ? safest : fastest;
+         let reason = "I analyzed the available paths.";
+
          if (context.goal === "find safest route") {
-            return {
-               bestRouteType: "safest",
-               routeData: safest,
-               reason: `I selected the safest route. ${safest.suggestion.message}`,
-               riskLevel: safest.suggestion.riskLevel
-            };
+            bestRouteType = "safest"; routeData = safest;
+            reason = `I selected the safest route based on your preference. ${safest.suggestion.message}`;
          } else if (context.goal === "find fastest route") {
-            return {
-               bestRouteType: "fastest",
-               routeData: fastest,
-               reason: `I found the fastest route to get you there quickly. ${fastest.suggestion.message}`,
-               riskLevel: fastest.suggestion.riskLevel
-            };
+            bestRouteType = "fastest"; routeData = fastest;
+            reason = `I found the fastest route to get you there smartly. ${fastest.suggestion.message}`;
+         } else if (context.goal === "find cheapest ride") {
+            bestRouteType = "cheapest"; routeData = fastest;
+            reason = `I determined the most cost-effective route for you. ${fastest.suggestion.message}`;
          } else {
-            // Default book ride
-            return {
-               bestRouteType: "optimal",
-               routeData: safest.safetyScore > 50 ? safest : fastest,
-               reason: `I analyzed the available paths. ${safest.suggestion.message ? safest.suggestion.message : fastest.suggestion.message}`,
-               riskLevel: safest.suggestion.riskLevel || fastest.suggestion.riskLevel
-            };
+            // Contextual decision logic
+            if (context.isUrgent || isHighTraffic) {
+                bestRouteType = "fastest"; routeData = fastest;
+                reason = "Traffic is high or time is urgent, so I chose the fastest route.";
+            } else if (safest.isNight) {
+                bestRouteType = "safest"; routeData = safest;
+                reason = "It is currently nighttime or unsafe hours, prioritizing the safest route.";
+            } else if (isRaining) {
+                bestRouteType = "safest"; routeData = safest;
+                reason = "Checking weather: Looks like rain. Choosing safest route to avoid flooded areas.";
+            } else {
+                bestRouteType = "optimal";
+                routeData = safest.safetyScore > 60 ? safest : fastest;
+                reason = "I am balancing speed and safety to provide the best overall ride.";
+            }
          }
+
+         return {
+             bestRouteType,
+             routeData,
+             reason,
+             riskLevel: routeData.suggestion.riskLevel
+         };
       }
       default:
          return null;
@@ -175,12 +198,23 @@ class RideAgent {
     // 3. Plan Actions
     const actions = this.planActions(goal, userContext);
 
+    // Determine urgency
+    let isUrgent = false;
+    if (extraction.time) {
+        // e.g. if the time is within the next 45 mins, mark as urgent
+        // For simplicity, we just check if user implicitly asked for jaldi via intent
+        if (intent === "quick_ride" || userQuery.toLowerCase().includes("urgent")) {
+             isUrgent = true;
+        }
+    }
+
     // 4. Execution Engine Loop
     let executionContext = { 
        goal, 
        pickup, 
        destination,
-       userId: userContext.userId 
+       userId: userContext.userId,
+       isUrgent
     };
 
     let finalSuggestion = null;

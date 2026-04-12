@@ -51,7 +51,7 @@ MODEL_DIR     = BASE_DIR / "transformer_model"
 MODEL_NAME    = "distilbert-base-uncased"
 
 # ── Label scheme (BIO) ────────────────────────────────────
-LABEL_LIST    = ["O", "B-TIME", "I-TIME", "B-DROP", "I-DROP"]
+LABEL_LIST    = ["O", "B-TIME", "I-TIME", "B-DROP", "I-DROP", "B-PREFERENCE", "I-PREFERENCE"]
 LABEL2ID      = {l: i for i, l in enumerate(LABEL_LIST)}
 ID2LABEL      = {i: l for i, l in enumerate(LABEL_LIST)}
 
@@ -286,19 +286,24 @@ def run_inference_demo(tokenizer, model) -> None:
 
         time_tokens  = []
         drop_tokens  = []
+        pref_tokens  = []
         for wid in sorted(word_preds):
             label = word_preds[wid]
             if label in ("B-TIME", "I-TIME"):
                 time_tokens.append(words[wid])
             elif label in ("B-DROP", "I-DROP"):
                 drop_tokens.append(words[wid])
+            elif label in ("B-PREFERENCE", "I-PREFERENCE"):
+                pref_tokens.append(words[wid])
 
         time_val = " ".join(time_tokens) if time_tokens else "⚠ NOT FOUND"
         drop_val = " ".join(drop_tokens) if drop_tokens else "⚠ NOT FOUND"
+        pref_val = " ".join(pref_tokens) if pref_tokens else "⚠ NOT FOUND"
 
         print(f"\n  INPUT  : {text}")
         print(f"  ┌─ TIME : {time_val}")
-        print(f"  └─ DROP : {drop_val}")
+        print(f"  ├─ DROP : {drop_val}")
+        print(f"  └─ PREF : {pref_val}")
 
 
 # ══════════════════════════════════════════════════════════

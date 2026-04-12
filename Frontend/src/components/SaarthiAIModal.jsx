@@ -30,6 +30,17 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
   const [aiResult, setAiResult] = useState(null);
   const [aiError, setAiError] = useState("");
   const [aiStep, setAiStep] = useState("input"); // "input" | "loading" | "result" | "error"
+  const [currentReasoningIndex, setCurrentReasoningIndex] = useState(-1);
+  const [deferredResult, setDeferredResult] = useState(null);
+
+  const SIMULATED_STEPS = [
+    "Understanding your request...",
+    "Extracting destination and time...",
+    "Analyzing traffic conditions...",
+    "Checking weather...",
+    "Choosing best route...",
+    "Finalizing plan..."
+  ];
 
   // Reset on open/close
   const token = localStorage.getItem("token");
@@ -57,8 +68,44 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
       setAiStep("input");
       setAiResult(null);
       setAiError("");
+      setCurrentReasoningIndex(-1);
+      setDeferredResult(null);
     }
   }, [isOpen]);
+
+  // Handle thinking simulation intervals
+  useEffect(() => {
+    let interval;
+    if (aiStep === "loading" && currentReasoningIndex < SIMULATED_STEPS.length - 1) {
+      // 300-800ms random delay as requested
+      const delay = Math.floor(Math.random() * 500) + 300; 
+      interval = setTimeout(() => {
+        setCurrentReasoningIndex(prev => prev + 1);
+      }, delay);
+    }
+    return () => clearTimeout(interval);
+  }, [aiStep, currentReasoningIndex]);
+
+  // Handle transitioning to result only when both API and animation are done
+  useEffect(() => {
+    if (aiStep === "loading" && currentReasoningIndex === SIMULATED_STEPS.length - 1 && deferredResult) {
+      if (deferredResult.error) {
+        const err = deferredResult.error;
+        const msg = err.response?.data?.message || err.message || "Something went wrong";
+        if (err.response?.data?.message && err.response?.data?.extracted) {
+          setAiResult(err.response.data);
+          setAiStep("result"); // Vague intent scenario is actually a result
+        } else {
+          setAiError(msg);
+          setAiStep("error");
+        }
+      } else {
+        setAiResult(deferredResult.data);
+        setAiStep("result");
+      }
+      setAiLoading(false);
+    }
+  }, [aiStep, currentReasoningIndex, deferredResult]);
 
   useEffect(() => {
     if (isOpen && !aiPickup) {
@@ -78,8 +125,13 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
     setAiLoading(true);
     setAiError("");
     setAiResult(null);
+    setCurrentReasoningIndex(0);
+    setDeferredResult(null);
 
     console.log("[Saarthi AI] Sending prompt:", prompt);
+
+    let fetchedData = null;
+    let fetchError = null;
 
     try {
       const response = await axios.post(
@@ -88,26 +140,17 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
         { headers: { token } }
       );
 
-      if (response.data.success) {
+      if (response.data.success || response.data.isUsualRide) {
         console.log("[Saarthi AI] AI Response Received:", response.data);
-        setAiResult(response.data);
-        setAiStep("result");
+        fetchedData = response.data;
       } else {
-        throw new Error(response.data.message || "Unknown error");
+        fetchError = new Error(response.data.message || "Unknown error");
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Something went wrong";
-      console.error("[Saarthi AI] Error:", msg);
-      // We check if it's agentic warning
-      if (err.response?.data?.message && err.response?.data?.extracted) {
-        setAiResult(err.response.data);
-      } else {
-        setAiError(msg);
-      }
-      setAiStep("error");
-    } finally {
-      setAiLoading(false);
+      fetchError = err;
     }
+
+    setDeferredResult({ data: fetchedData, error: fetchError });
   };
 
   // ── AI Prompt: Confirm and start auto-booking ──────────
@@ -284,18 +327,40 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
             )}
 
             {aiStep === "loading" && (
-              <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center animate-pulse">
-                    <Brain size={28} className="text-white" />
+              <div className="flex flex-col py-6 gap-6 min-h-[220px]">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center animate-pulse">
+                      <Brain size={28} className="text-white" />
+                    </div>
+                    <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-lg">
+                      <Loader2 size={14} className="text-blue-600 animate-spin" />
+                    </div>
                   </div>
-                  <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-lg">
-                    <Loader2 size={14} className="text-blue-600 animate-spin" />
+                  <div>
+                    <h3 className="font-bold text-zinc-900 text-lg">Thinking...</h3>
+                    <p className="text-xs text-zinc-500 font-medium">Saarthi is building your plan</p>
                   </div>
                 </div>
-                <div className="text-center">
-                  <p className="font-bold text-zinc-900 mb-1">AI is understanding your request…</p>
-                  <p className="text-xs text-zinc-500">Extracting destination and time from your prompt</p>
+
+                <div className="flex flex-col gap-3 pl-2">
+                  {SIMULATED_STEPS.map((stepText, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`flex items-center gap-3 transition-opacity duration-300 ${
+                        idx <= currentReasoningIndex ? "opacity-100" : "opacity-0 hidden"
+                      }`}
+                    >
+                      {idx < currentReasoningIndex ? (
+                        <CheckCircle size={16} className="text-green-500 flex-shrink-0" />
+                      ) : (
+                        <Loader2 size={16} className="text-blue-500 animate-spin flex-shrink-0" />
+                      )}
+                      <span className={`text-sm font-medium ${idx < currentReasoningIndex ? "text-zinc-700" : "text-blue-700 font-bold"}`}>
+                        {stepText}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -346,7 +411,7 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                       </button>
                     </div>
                   </>
-                ) : (
+                ) : aiResult.plan ? (
                   <>
                     {/* Success badge */}
                     <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl p-3">
@@ -403,11 +468,11 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">AI Source</span>
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                          aiResult.extracted.source === "ner" 
+                          aiResult.extracted?.source === "ner" 
                             ? "bg-purple-100 text-purple-700" 
                             : "bg-orange-100 text-orange-700"
                         }`}>
-                          {aiResult.extracted.source === "ner" ? "spaCy NER" : "Transformer"}
+                          {aiResult.extracted?.source === "ner" ? "spaCy NER" : "Transformer"}
                         </span>
                       </div>
                     </div>
@@ -421,9 +486,21 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                       </div>
                     )}
 
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
+                        <div className="flex justify-between items-center w-full">
+                           <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">AI Recommendation</span>
+                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-700">
+                             {aiResult.plan.routeType?.toUpperCase() || "OPTIMAL"} ROUTE
+                           </span>
+                        </div>
+                        <p className="text-sm font-medium text-indigo-900 leading-relaxed">
+                          {aiResult.agentInfo?.message || "I found the best route for you."}
+                        </p>
+                    </div>
+
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setAiStep("input"); setAiResult(null); }}
+                        onClick={() => { setAiStep("input"); setAiResult(null); setCurrentReasoningIndex(-1); }}
                         className="flex-1 py-3 rounded-2xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
                       >
                         Try Again
@@ -434,6 +511,32 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                       >
                         Confirm & Book
                         <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl p-3">
+                      <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
+                      <p className="text-xs font-bold text-amber-800">Clarification Needed</p>
+                    </div>
+                    <div className="bg-white border rounded-xl p-4 shadow-sm">
+                      <p className="text-sm font-medium text-zinc-800 leading-relaxed">
+                        {aiResult.message}
+                      </p>
+                      {aiResult.extracted?.drop && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase">Extracted Location</p>
+                          <p className="text-sm font-bold text-zinc-900 truncate">{aiResult.extracted.drop}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => { setAiStep("input"); setAiResult(null); setCurrentReasoningIndex(-1); }}
+                        className="w-full py-3.5 rounded-2xl bg-zinc-100 text-zinc-700 font-bold text-sm hover:bg-zinc-200 transition-colors"
+                      >
+                        Try Again
                       </button>
                     </div>
                   </>

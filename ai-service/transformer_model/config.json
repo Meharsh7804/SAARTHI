@@ -15,13 +15,17 @@
     "1": "B-TIME",
     "2": "I-TIME",
     "3": "B-DROP",
-    "4": "I-DROP"
+    "4": "I-DROP",
+    "5": "B-PREFERENCE",
+    "6": "I-PREFERENCE"
   },
   "initializer_range": 0.02,
   "label2id": {
     "B-DROP": 3,
+    "B-PREFERENCE": 5,
     "B-TIME": 1,
     "I-DROP": 4,
+    "I-PREFERENCE": 6,
     "I-TIME": 2,
     "O": 0
   },

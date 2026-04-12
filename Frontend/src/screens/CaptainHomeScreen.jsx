@@ -5,7 +5,7 @@ import axios from "axios";
 import { useCaptain } from "../contexts/CaptainContext";
 import { Phone, User } from "lucide-react";
 import { SocketDataContext } from "../contexts/SocketContext";
-import { NewRide, Sidebar } from "../components";
+import { NewRide, Sidebar, CaptainMapComponent } from "../components";
 import Console from "../utils/console";
 import { useAlert } from "../hooks/useAlert";
 import { Alert } from "../components";
@@ -27,6 +27,7 @@ const defaultRideData = {
   status: "pending",
   duration: 0,
   distance: 0,
+  selectedRouteType: "fastest",
   _id: "123456789012345678901234",
 };
 
@@ -64,6 +65,7 @@ function CaptainHomeScreen() {
     JSON.parse(localStorage.getItem("messages")) || []
   );
   const [error, setError] = useState("");
+  const [routesData, setRoutesData] = useState(null);
 
   // Panels
   const [showCaptainDetailsPanel, setShowCaptainDetailsPanel] = useState(true);
@@ -312,6 +314,29 @@ function CaptainHomeScreen() {
     localStorage.setItem("showBtn", JSON.stringify(showBtn));
   }, [showNewRidePanel, showBtn]);
 
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      if (newRide && newRide.pickup && newRide.destination && newRide._id !== "123456789012345678901234") {
+        console.log("[Captain] Fetching routes for ride:", newRide._id, "Mode:", newRide.selectedRouteType);
+        try {
+          const response = await axios.get(
+            `${import.meta.env.VITE_SERVER_URL}/ride/get-fare?pickup=${encodeURIComponent(newRide.pickup)}&destination=${encodeURIComponent(newRide.destination)}`,
+            { headers: { token: localStorage.getItem("token") } }
+          );
+          console.log("[Captain] Routes fetched:", Object.keys(response.data));
+          if (response.data) {
+            setRoutesData(response.data);
+          }
+        } catch (error) {
+          console.error("[Captain] Failed to fetch routes:", error.response?.status, error.response?.data || error.message);
+        }
+      } else {
+        setRoutesData(null);
+      }
+    };
+    fetchRoutes();
+  }, [newRide.pickup, newRide.destination, newRide._id]);
+
   const calculateEarnings = () => {
     let Totalearnings = 0;
     let Todaysearning = 0;
@@ -392,13 +417,29 @@ function CaptainHomeScreen() {
         onClose={hideAlert}
         type={alert.type}
       />
-      <iframe
-        src={mapLocation}
-        className="map w-full h-[80vh]"
-        allowFullScreen={true}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-      ></iframe>
+      {routesData && newRide._id !== "123456789012345678901234" ? (
+        <div className="absolute top-0 left-0 w-full h-[80vh] z-0">
+          <CaptainMapComponent
+            routesData={routesData}
+            selectedMode={newRide.selectedRouteType || 'fastest'}
+            captainLocation={riderLocation}
+            pickupLocation={newRide.pickup}
+            captainStatus={
+              showBtn === "arrive" ? "to_pickup"
+              : showBtn === "otp"   ? "at_pickup"
+              : "on_ride"
+            }
+          />
+        </div>
+      ) : (
+        <iframe
+          src={mapLocation}
+          className="map w-full h-[80vh]"
+          allowFullScreen={true}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        ></iframe>
+      )}
 
       {showCaptainDetailsPanel && (
         <div className="absolute bottom-0 flex flex-col justify-start p-4 gap-2 rounded-t-lg bg-white h-fit w-full">

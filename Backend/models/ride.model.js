@@ -72,6 +72,9 @@ const rideSchema = new mongoose.Schema(
       enum: ["fastest", "safest"],
       default: "fastest",
     },
+    polyline: {
+      type: String,
+    },
     driverLocation: {
       ltd: {
         type: Number,

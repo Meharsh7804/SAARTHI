@@ -10,6 +10,7 @@ import Spinner from "./Spinner";
 import Sidebar from "./Sidebar";
 import VerifyEmail from "./VerifyEmail";
 import MapComponent from "./MapComponent";
+import CaptainMapComponent from "./CaptainMapComponent";
 import RouteSelector from "./RouteSelector";
 import SplashScreen from "./SplashScreen";
 import StarRatingComponent from "./StarRatingComponent";
@@ -31,6 +32,7 @@ export {
   VerifyEmail,
   RouteSelector,
   MapComponent,
+  CaptainMapComponent,
   SplashScreen,
   StarRatingComponent,
   FeedbackModal,

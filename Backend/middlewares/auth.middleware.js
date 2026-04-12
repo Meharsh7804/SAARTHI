@@ -3,6 +3,36 @@ const jwt = require("jsonwebtoken");
 const userModel = require("../models/user.model");
 const captainModel = require("../models/captain.model");
 
+// Middleware that accepts either a user OR captain token
+module.exports.authAny = async (req, res, next) => {
+  const token = req.cookies.token || req.headers.token;
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+  const isBlacklisted = await blacklistTokenModel.findOne({ token });
+  if (isBlacklisted) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Try user first
+    const user = await userModel.findOne({ _id: decoded.id });
+    if (user) {
+      req.user = user;
+      req.userType = "user";
+      return next();
+    }
+    // Then captain
+    const captain = await captainModel.findOne({ _id: decoded.id });
+    if (captain) {
+      req.captain = captain;
+      req.userType = "captain";
+      return next();
+    }
+    return res.status(401).json({ message: "Unauthorized" });
+  } catch {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+};
+
 module.exports.authUser = async (req, res, next) => {
   const token = req.cookies.token || req.headers.token;
 
