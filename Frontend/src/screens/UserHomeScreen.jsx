@@ -16,7 +16,7 @@ import {
   SaarthiAIModal,
 } from "../components";
 import { getSafetySuggestion, getSafePlaces, calculateBookingTime } from "../utils/aiAssistant";
-import { Sparkles, PhoneCall, ShieldAlert } from "lucide-react";
+import { Sparkles, PhoneCall, ShieldAlert, Clock } from "lucide-react";
 import axios from "axios";
 import debounce from "lodash.debounce";
 import { SocketDataContext } from "../contexts/SocketContext";
@@ -681,7 +681,25 @@ function UserHomeScreen() {
             {sosHolding ? `Calling 112...` : "Hold for SOS"}
           </div>
 
-          {/* SOS Button */}
+          {/* Auto Booking Status Indicator */}
+      {autoBookingTask && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[60] bg-white/90 backdrop-blur-md border border-blue-100 px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 animate-bounce">
+          <div className="p-1.5 bg-blue-600 rounded-lg">
+            <Clock size={16} className="text-white" />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Scheduled Ride</span>
+              {autoBookingTask.recurrence === "DAILY" && (
+                <span className="text-[8px] font-black bg-blue-100 text-blue-700 px-1 py-0.5 rounded uppercase">Daily</span>
+              )}
+            </div>
+            <span className="text-xs font-bold text-zinc-900">
+              Booking for {new Date(autoBookingTask.arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        </div>
+      )}
           <div className="relative">
             {/* Progress ring */}
             <svg

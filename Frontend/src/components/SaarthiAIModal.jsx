@@ -167,6 +167,7 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
       destination: aiResult.plan.destination,
       arrivalTime: aiResult.plan.arrivalTimeFormatted,
       bookingTime: aiResult.plan.bookingTime,
+      recurrence: aiResult.plan.recurrence
     };
 
     // If bookNow, trigger immediately via the existing flow
@@ -477,7 +478,12 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                       <div className="h-px bg-zinc-200" />
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Arrival Time</span>
-                        <span className="text-sm font-bold text-zinc-900">{aiResult.plan.arrivalTimeFormatted}</span>
+                        <div className="flex items-center gap-2">
+                          {aiResult.plan.recurrence === "DAILY" && (
+                            <span className="text-[9px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-md animate-pulse">DAILY</span>
+                          )}
+                          <span className="text-sm font-bold text-zinc-900">{aiResult.plan.arrivalTimeFormatted}</span>
+                        </div>
                       </div>
                       <div className="h-px bg-zinc-200" />
                       <div className="flex justify-between items-center">
@@ -587,7 +593,6 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
               </div>
             )}
             </motion.div>
-          )}
 
           {activeTab === "manual" && (
             <motion.div 

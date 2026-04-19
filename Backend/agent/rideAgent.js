@@ -2,6 +2,7 @@ const axios = require('axios');
 const mapService = require('../services/map.service');
 const rideHistoryModel = require('../models/rideHistory.model');
 const safetyService = require('../services/safety.service');
+const weatherService = require('../services/weather.service');
 const { generateSuggestion } = require('../utils/aiSuggestions');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8001";
@@ -121,8 +122,16 @@ class RideAgent {
          const fastest = [...context.safetyData].sort((a,b) => a.route.legs[0].duration.value - b.route.legs[0].duration.value)[0];
          const safest = [...context.safetyData].sort((a,b) => b.safetyScore - a.safetyScore)[0];
          
-         // Mock Weather & Traffic Data
-         const isRaining = Math.random() > 0.8; // 20% chance of rain
+         // Real Weather & Mock Traffic Data
+         let weather = { isRaining: false, condition: "Clear" };
+         try {
+            const coords = await mapService.getAddressCoordinate(context.pickup);
+            weather = await weatherService.getCurrentWeather(coords.ltd, coords.lng);
+         } catch (e) {
+            console.warn("[RideAgent] Weather fetch failed, defaulting to clear.");
+         }
+
+         const isRaining = weather.isRaining;
          const isHighTraffic = fastest.route.legs[0].duration.value > 1800; // >30m
 
          let bestRouteType = "optimal";
@@ -148,7 +157,7 @@ class RideAgent {
                 reason = "It is currently nighttime or unsafe hours, prioritizing the safest route.";
             } else if (isRaining) {
                 bestRouteType = "safest"; routeData = safest;
-                reason = "Checking weather: Looks like rain. Choosing safest route to avoid flooded areas.";
+                reason = `Checking weather: It is currently ${weather.condition.toLowerCase()}. Choosing safest route to avoid slippery roads or flooded areas.`;
             } else {
                 bestRouteType = "optimal";
                 routeData = safest.safetyScore > 60 ? safest : fastest;

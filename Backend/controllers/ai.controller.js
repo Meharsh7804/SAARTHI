@@ -14,6 +14,7 @@
 const axios = require("axios");
 const mapService = require("../services/map.service");
 const rideAgent = require("../agent/rideAgent");
+const { normalizeTime } = require("../utils/timeParser");
 
 // Python AI service URL (FastAPI on port 8001)
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8001";
@@ -42,8 +43,14 @@ module.exports.extractAndPlan = async (req, res) => {
   try {
     const userContext = { userId: req.user._id, pickup };
     
+    // ── Pre-process with Robust Parser ─────────────────
+    const normalization = normalizeTime(prompt);
+    console.log("[Saarthi AI] Normalization:", normalization);
+    
     // ── Call Agent Workflow ──────────────────────────────
+    // Use the normalized time for cleaner agent extraction if possible
     const agentResponse = await rideAgent.processRequest(prompt, userContext);
+    console.log("[Saarthi AI] Agent Extraction:", agentResponse.extracted);
 
     if (agentResponse.isUsualRideSuggestion) {
        return res.status(200).json({
@@ -62,23 +69,27 @@ module.exports.extractAndPlan = async (req, res) => {
     }
 
     const { planDetails, bestOption, nearbySafePlaces, extracted } = agentResponse;
-    const time = planDetails.extractionTime;
+    const time = normalization.time || planDetails.extractionTime;
 
     // ── Time Parsing & Booking Time Calculation ─────────
     const arrivalTime = parseTimeString(time);
+    console.log("[Saarthi AI] Final Parsed Time:", arrivalTime);
     let arrivalDate = new Date();
+    if (normalization.date) {
+        const [y, m, d] = normalization.date.split("-").map(Number);
+        arrivalDate.setFullYear(y, m - 1, d);
+    }
+
     let bookingTime = new Date();
     let bookNow = true;
     let travelTimeMinutes = 25;
     let BUFFER_MINUTES = 5;
 
     if (arrivalTime) {
+      arrivalDate.setHours(arrivalTime.hours, arrivalTime.minutes, 0, 0);
       const now = new Date();
-      arrivalDate = new Date(
-        now.getFullYear(), now.getMonth(), now.getDate(),
-        arrivalTime.hours, arrivalTime.minutes
-      );
-      if (arrivalDate < now) {
+      
+      if (arrivalDate < now && !normalization.date) {
         arrivalDate.setDate(arrivalDate.getDate() + 1);
       }
 
@@ -90,12 +101,25 @@ module.exports.extractAndPlan = async (req, res) => {
       bookNow = bookingTime <= now;
     }
 
+    // Improve Agent Message for Recurrence
+    let finalMessage = agentResponse.agentResponse;
+    if (normalization.recurrence === "DAILY" && arrivalTime) {
+        finalMessage = `Your ride has been scheduled daily at ${arrivalTime.hours.toString().padStart(2, '0')}:${arrivalTime.minutes.toString().padStart(2, '0')}.`;
+    } else if (arrivalTime) {
+        const dateStr = arrivalDate.toLocaleDateString("en-IN", { day: 'numeric', month: 'short' });
+        finalMessage = `Your ride has been scheduled for ${dateStr} at ${arrivalTime.hours.toString().padStart(2, '0')}:${arrivalTime.minutes.toString().padStart(2, '0')}.`;
+    }
+
     // ── Return structured plan ───────────────────────
     return res.status(200).json({
       success: true,
-      extracted: extracted,
+      extracted: {
+          ...extracted,
+          time: normalization.time || extracted.time,
+          recurrence: normalization.recurrence
+      },
       agentInfo: {
-        message: agentResponse.agentResponse,
+        message: finalMessage,
         intent: planDetails.intentDetected,
         goal: planDetails.goalActive,
         riskLevel: bestOption.riskLevel,
@@ -112,7 +136,8 @@ module.exports.extractAndPlan = async (req, res) => {
         bookingTime: arrivalTime ? bookingTime.toISOString() : null,
         bookingTimeFormatted: arrivalTime ? bookingTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : null,
         bookNow: bookNow,
-        routeType: bestOption.bestRouteType
+        routeType: bestOption.bestRouteType,
+        recurrence: normalization.recurrence
       },
       details: extracted.details,
     });

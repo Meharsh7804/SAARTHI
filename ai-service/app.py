@@ -31,6 +31,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForTokenClassification
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ── Paths ─────────────────────────────────────────────────
 BASE_DIR        = Path(__file__).parent
@@ -71,7 +76,10 @@ def load_models():
     if trans_path.exists():
         try:
             trans_tokenizer = AutoTokenizer.from_pretrained(str(TRANS_MODEL_DIR))
-            trans_model     = AutoModelForTokenClassification.from_pretrained(str(TRANS_MODEL_DIR))
+            trans_model     = AutoModelForTokenClassification.from_pretrained(
+                str(TRANS_MODEL_DIR),
+                ignore_mismatched_sizes=True
+            )
             trans_model.eval()
             print(f"[AI-Service] ✔  Transformer model loaded ({TRANS_MODEL_DIR})")
         except Exception as e:
@@ -370,9 +378,32 @@ def extract(req: ExtractRequest):
         raise HTTPException(status_code=400, detail="Input text cannot be empty")
 
     try:
-        from nlp_preprocessor import process_query
-        return process_query(req.text.strip())
+        # Run the Hybrid AI extraction (NER + Transformer)
+        result = hybrid_extract(req.text.strip())
+        
+        # Determine status based on whether we found the critical 'drop' location
+        if result["drop"]:
+            status = "confirmed"
+            suggestion = None
+        else:
+            status = "clarification_needed"
+            suggestion = "I couldn't identify a clear destination. Could you please specify where you want to go?"
+
+        # Return structured response
+        return ExtractResponse(
+            date=None, # Models don't handle date yet, can be added later
+            time=result["time"],
+            location=result["drop"],
+            confidence=Confidence(
+                date=0.0,
+                time=1.0 if result["time"] else 0.0,
+                location=1.0 if result["drop"] else 0.0
+            ),
+            status=status,
+            suggestion=suggestion
+        )
     except Exception as e:
+        logger.error(f"Extraction error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
