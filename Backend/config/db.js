@@ -8,12 +8,15 @@ let MONGO_DB = {
 let environment = process.env.ENVIRONMENT;
 
 mongoose
-  .connect(MONGO_DB[environment].url)
+  .connect(MONGO_DB[environment].url, {
+    serverSelectionTimeoutMS: 5000,
+    family: 4 // Force IPv4
+  })
   .then(() => {
     console.log("Connected to Mongo DB", MONGO_DB[environment].type);
   })
-  .catch(() => {
-    console.log("Failed to connect to MongoDB");
+  .catch((err) => {
+    console.error("Failed to connect to MongoDB:", err.message);
   });
 
 module.exports = mongoose.connection;

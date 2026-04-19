@@ -128,13 +128,18 @@ class ExtractRequest(BaseModel):
         }
 
 
+class Confidence(BaseModel):
+    date: float
+    time: float
+    location: float
+
 class ExtractResponse(BaseModel):
-    text   : str
-    time   : Optional[str]
-    drop   : Optional[str]
-    preference : Optional[str]
-    source : str          # "ner" | "transformer" | "none"
-    details: dict
+    date: Optional[str] = None
+    time: Optional[str] = None
+    location: Optional[str] = None
+    confidence: Optional[Confidence] = None
+    status: str
+    suggestion: Optional[str] = None
 
 
 # ══════════════════════════════════════════════════════════
@@ -356,33 +361,19 @@ def health():
 @app.post("/extract", response_model=ExtractResponse, tags=["Extraction"])
 def extract(req: ExtractRequest):
     """
-    **Hybrid entity extraction.**
-
-    Extracts TIME and DROP from a ride booking request using:
-    - **Primary**: spaCy NER (fast, custom-trained)
-    - **Fallback**: DistilBERT Transformer (when NER is incomplete)
-
-    Returns structured JSON with source attribution.
+    **Enhanced Rule-Based NLP extraction.**
+    
+    Extracts Date, Time and Location using rule-based and fuzzy extraction,
+    preventing hallucinations.
     """
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty")
 
-    if ner_nlp is None and trans_model is None:
-        raise HTTPException(
-            status_code=503,
-            detail="No AI models loaded. Train models first: train_ner.py & train_transformer.py",
-        )
-
-    result = hybrid_extract(req.text.strip())
-
-    return ExtractResponse(
-        text   = req.text,
-        time   = result["time"],
-        drop   = result["drop"],
-        preference = result.get("preference"),
-        source = result["source"],
-        details= result["details"],
-    )
+    try:
+        from nlp_preprocessor import process_query
+        return process_query(req.text.strip())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/extract/ner-only", tags=["Extraction"])

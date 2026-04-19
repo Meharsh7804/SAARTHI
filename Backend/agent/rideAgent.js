@@ -28,11 +28,21 @@ class RideAgent {
   async detectIntent(userQuery) {
     const query = userQuery.toLowerCase();
     
-    // Call existing NER
-    let extraction = { time: null, drop: null, source: null, details: {} };
+    // Call existing NER or our new NLP system
+    let extraction = { time: null, drop: null, source: null, details: {}, preference: null };
     try {
       const aiResponse = await axios.post(`${AI_SERVICE_URL}/extract`, { text: userQuery }, { timeout: 10000 });
-      extraction = aiResponse.data;
+      let data = aiResponse.data;
+      
+      if (data.status === "clarification_needed") {
+          return { extraction: { time: null, drop: null, preference: null }, intent: "clarification", clarification: data.suggestion };
+      }
+      
+      extraction.time = data.time;
+      extraction.drop = data.location;
+      extraction.details = data.confidence;
+      // We don't have preference from rule-based yet, default to empty
+      extraction.preference = null;
     } catch (err) {
       console.warn("[RideAgent] Fallback NER failed", err.message);
     }
@@ -162,7 +172,15 @@ class RideAgent {
     // 1. Habit integration
     const usualRide = await this.checkUsualRide(userContext.userId);
     
-    const { extraction, intent } = await this.detectIntent(userQuery);
+    const { extraction, intent, clarification } = await this.detectIntent(userQuery);
+
+    if (intent === "clarification") {
+       return {
+           agentResponse: clarification || "I need more clarification on the location.",
+           needsMoreInfo: true,
+           extracted: extraction
+       };
+    }
 
     // If intent vague and no clear drop location, suggest usual ride
     if (!extraction.drop && !extraction.source && usualRide && userQuery.toLowerCase().includes("usual")) {
