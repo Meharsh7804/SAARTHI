@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "../contexts/UserContext";
 import map from "/map.png";
 import logo from "/saarthi.png";
@@ -601,8 +602,19 @@ function UserHomeScreen() {
       setShowFindTripPanel(panels.showFindTripPanel);
       setShowSelectVehiclePanel(panels.showSelectVehiclePanel);
       setShowRideDetailsPanel(panels.showRideDetailsPanel);
+    } else {
+      // Default state if no storage
+      setShowFindTripPanel(true);
     }
   }, []);
+
+  // Recovery logic: Ensure the panel doesn't disappear if all flags are false
+  useEffect(() => {
+    if (rideStatus === "pending" && !showFindTripPanel && !showSelectVehiclePanel && !showRideDetailsPanel && !loading) {
+      setShowFindTripPanel(true);
+    }
+  }, [showFindTripPanel, showSelectVehiclePanel, showRideDetailsPanel, rideStatus, loading]);
+
 
   useEffect(() => {
     const rideData = {
@@ -740,10 +752,10 @@ function UserHomeScreen() {
       {/* Main Panel */}
       <div 
         onClick={() => rideStatus === "ongoing" && setIsExpanded(!isExpanded)}
-        className={`absolute bottom-0 w-full rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.1)] z-10 transition-all duration-500 flex flex-col overflow-hidden cursor-pointer ${
+        className={`absolute bottom-0 w-full rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.15)] z-10 transition-all duration-500 flex flex-col overflow-hidden cursor-pointer ${
           rideStatus === "ongoing" 
             ? (isExpanded ? "h-[80vh]" : "h-[22vh]") 
-            : "max-h-[90vh]"
+            : "min-h-[40vh] max-h-[90vh]"
         } ${
           rideMode === "female-only" 
             ? "bg-pink-50/95 border-t-2 border-pink-200" 
@@ -751,32 +763,42 @@ function UserHomeScreen() {
         }`}
       >
         {/* Swipe Indicator Part 3 Task 2 */}
+        {/* Swipe Indicator */}
         {(rideStatus === "ongoing" || rideStatus === "accepted") && (
-          <div className="w-full flex justify-center py-2">
-            <div className={`w-12 h-1.5 rounded-full ${rideMode === "female-only" ? "bg-pink-200" : "bg-zinc-200"}`} />
+          <div className="w-full flex justify-center py-3">
+            <div className={`w-12 h-1.5 rounded-full ${rideMode === "female-only" ? "bg-pink-300" : "bg-zinc-300"} opacity-50`} />
           </div>
         )}
         
-        {/* Step 1: Find a trip */}
-        {showFindTripPanel && (
-          <>
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-black">Find a trip</h1>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-zinc-500">Female Only</span>
-                  <button 
-                    onClick={() => setRideMode(prev => prev === "normal" ? "female-only" : "normal")}
-                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${
-                      rideMode === "female-only" ? "bg-pink-500" : "bg-zinc-200"
-                    }`}
-                  >
-                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${
-                      rideMode === "female-only" ? "translate-x-6" : ""
-                    }`} />
-                  </button>
+        <AnimatePresence mode="wait">
+          {/* Step 1: Find a trip */}
+          {showFindTripPanel && (
+            <motion.div 
+              key="find-trip"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col h-full"
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h1 className="text-2xl font-bold tracking-tight">Where to?</h1>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Safe Mode</span>
+                    <button 
+                      onClick={() => setRideMode(prev => prev === "normal" ? "female-only" : "normal")}
+                      className={`w-11 h-6 rounded-full p-1 transition-all duration-300 shadow-inner ${
+                        rideMode === "female-only" ? "bg-pink-500" : "bg-zinc-200"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 transform ${
+                        rideMode === "female-only" ? "translate-x-5" : ""
+                      }`} />
+                    </button>
+                  </div>
                 </div>
-              </div>
+
 
             {usualRide && pickupLocation === "" && destinationLocation === "" && (
               <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl mb-4 text-sm shadow-sm">
@@ -890,49 +912,67 @@ function UserHomeScreen() {
             </div>
             )}
 
-            <div className="mt-4 max-h-[25vh] overflow-y-auto px-6"> {/* Added px-6 here to maintain padding */}
-              {locationSuggestion.length > 0 && (
-                <LocationSuggestions
-                  suggestions={locationSuggestion}
-                  setSuggestions={setLocationSuggestion}
-                  setPickupLocation={setPickupLocation}
-                  setDestinationLocation={setDestinationLocation}
-                  input={selectedInput}
-                />
-              )}
-            </div>
-          </>
-        )}
+              <div className="mt-4 max-h-[25vh] overflow-y-auto px-6">
+                {locationSuggestion.length > 0 && (
+                  <LocationSuggestions
+                    suggestions={locationSuggestion}
+                    setSuggestions={setLocationSuggestion}
+                    setPickupLocation={setPickupLocation}
+                    setDestinationLocation={setDestinationLocation}
+                    input={selectedInput}
+                  />
+                )}
+              </div>
+            </motion.div>
+          )}
 
-        {/* Step 2: Select Vehicle & Route */}
-        {showSelectVehiclePanel && routesData && (
-          <>
-            <RouteSelector 
-              selectedMode={selectedRouteMode} 
-              onSelect={handleRouteModeChange} 
-              fastest={routesData.fastest}
-              safest={routesData.safest}
-              onBack={() => {
-                  setShowSelectVehiclePanel(false);
-                  setShowFindTripPanel(true);
-              }}
-            />
-            <div className="px-4 pb-4 overflow-y-auto">
-                <SelectVehicle
-                    selectedVehicle={selectedVehicle}
-                    setSelectedVehicle={setSelectedVehicle}
-                    setShowPanel={setShowSelectVehiclePanel}
-                    showNextPanel={setShowRideDetailsPanel}
-                    fare={fare}
-                    rideMode={rideMode}
-                />
-            </div>
-          </>
-        )}
+          {/* Step 2: Select Vehicle & Route */}
+          {showSelectVehiclePanel && routesData && (
+            <motion.div 
+              key="select-vehicle"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col h-full"
+            >
+              <RouteSelector 
+                selectedMode={selectedRouteMode} 
+                onSelect={handleRouteModeChange} 
+                fastest={routesData.fastest}
+                safest={routesData.safest}
+                onBack={() => {
+                    setShowSelectVehiclePanel(false);
+                    setShowFindTripPanel(true);
+                    // If user wants to go "home", they can edit inputs or we can provide a clear option
+                    // To satisfy the "navigate him back to home page" request:
+                    // If they click back from vehicle selection, they are essentially going back to the start.
+                    setRoutesData(null); // Clear routes to reset search state
+                }}
+              />
+              <div className="px-4 pb-4 overflow-y-auto">
+                  <SelectVehicle
+                      selectedVehicle={selectedVehicle}
+                      setSelectedVehicle={setSelectedVehicle}
+                      setShowPanel={setShowSelectVehiclePanel}
+                      showNextPanel={setShowRideDetailsPanel}
+                      fare={fare}
+                      rideMode={rideMode}
+                  />
+              </div>
+            </motion.div>
+          )}
 
-        {/* Step 3: Ride Details & Confirmation */}
-        {showRideDetailsPanel && (
-            <div className="overflow-y-auto">
+          {/* Step 3: Ride Details & Confirmation */}
+          {showRideDetailsPanel && (
+            <motion.div 
+              key="ride-details"
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 50 }}
+              transition={{ duration: 0.4, type: "spring", damping: 25, stiffness: 200 }}
+              className="overflow-y-auto"
+            >
                 <RideDetails
                   showPanel={showRideDetailsPanel}
                   setShowPanel={setShowRideDetailsPanel}
@@ -948,9 +988,9 @@ function UserHomeScreen() {
                   rideStatus={rideStatus}
                   rideMode={rideMode}
                 />
-                {/* Old AI Suggestions placement removed to use floating version */}
-            </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <SaarthiAIModal 

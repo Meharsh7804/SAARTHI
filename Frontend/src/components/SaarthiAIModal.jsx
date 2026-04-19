@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Clock, MapPin, Sparkles, Brain, Keyboard, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+
 import Button from './Button';
 import LocationSuggestions from './LocationSuggestions';
 import axios from 'axios';
@@ -201,11 +203,27 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
 
   // ── RENDER ─────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300 flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="p-6 pb-0">
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+          />
+          
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-[32px] overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col max-h-[90vh] z-10 border border-white/20"
+          >
+            {/* Header */}
+            <div className="p-6 pb-0">
+
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl shadow-lg shadow-blue-500/20">
@@ -248,9 +266,16 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
           </div>
         </div>
 
-        {/* ── AI PROMPT TAB ──────────────────────────────── */}
-        {activeTab === "ai" && (
-          <div className="px-6 pb-6 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto">
+          <AnimatePresence mode="wait">
+
+            <motion.div 
+              key="ai-tab"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              className="px-6 pb-6"
+            >
             
             {aiStep === "input" && (
               <>
@@ -561,12 +586,17 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                 </button>
               </div>
             )}
-          </div>
-        )}
+            </motion.div>
+          )}
 
-        {/* ── MANUAL TAB (original) ─────────────────────── */}
-        {activeTab === "manual" && (
-          <div className="px-6 pb-6 overflow-y-auto">
+          {activeTab === "manual" && (
+            <motion.div 
+              key="manual-tab"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              className="px-6 pb-6"
+            >
             <p className="text-sm text-zinc-500 mb-6 font-medium">
               Enter your trip details and desired arrival time. Saarthi AI will automatically book your ride at the perfect moment.
             </p>
@@ -664,11 +694,16 @@ const SaarthiAIModal = ({ isOpen, onClose, onStartAutoBooking, loading: parentLo
                 </div>
               </div>
             </form>
-          </div>
-        )}
-      </div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
     </div>
+      )}
+    </AnimatePresence>
   );
 };
+
 
 export default SaarthiAIModal;
