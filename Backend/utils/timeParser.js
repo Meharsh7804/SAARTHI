@@ -36,51 +36,63 @@ function normalizeTime(inputText, currentDateTime = new Date(), userLocale = "en
     // ── TIME NORMALIZATION ──────────────────────────────
     let hours = null;
     let minutes = 0;
-    let isPM = false;
-    let isAM = false;
 
-    // Detect Morning/Afternoon/Evening/Night
-    if (text.includes("morning") || text.includes("subah")) {
-        isAM = true;
-    } else if (text.includes("afternoon") || text.includes("dopahar")) {
-        isPM = true;
-    } else if (text.includes("evening") || text.includes("sham")) {
-        isPM = true;
-    } else if (text.includes("night") || text.includes("raat")) {
-        isPM = true;
-    }
+    // STEP 1: EXTRACT HOURS + MINUTES
+    // Detect patterns: "12 30", "12:30", "12.30", "1230", "7"
+    const timeRegex = /(?:(\d{1,2})[\s.:](\d{1,2}))|(?:(\d{2})(\d{2}))|(\d{1,2})/;
+    const timeMatch = text.match(timeRegex);
 
-    // Explicit fixes: "raat 8 baje" -> 20:00
-    // regex for "raat X baje" or "X baje raat"
-    const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?/);
     if (timeMatch) {
-        hours = parseInt(timeMatch[1]);
-        if (timeMatch[2]) minutes = parseInt(timeMatch[2]);
-        
-        const modifier = (timeMatch[3] || "").toLowerCase();
-        if (modifier === "pm") isPM = true;
-        if (modifier === "am") isAM = true;
-
-        if (isPM && hours < 12) hours += 12;
-        if (isAM && hours === 12) hours = 0;
+        if (timeMatch[1] !== undefined) {
+            // format: HH[\s.:]MM (e.g., 12 30, 12:30, 12.30)
+            hours = parseInt(timeMatch[1]);
+            minutes = parseInt(timeMatch[2]);
+        } else if (timeMatch[3] !== undefined) {
+            // format: HHMM (e.g., 1230)
+            hours = parseInt(timeMatch[3]);
+            minutes = parseInt(timeMatch[4]);
+        } else if (timeMatch[5] !== undefined) {
+            // format: HH (e.g., 7)
+            hours = parseInt(timeMatch[5]);
+            minutes = 0;
+        }
     }
 
-    // Midnight / Noon
-    if (text.includes("midnight")) {
+    // Handle context-based AM/PM flags
+    // Step 2 Keywords: morning -> AM, afternoon/evening/night/raat -> PM
+    let isPM = text.includes("pm") || text.includes("afternoon") || text.includes("dopahar") || 
+               text.includes("evening") || text.includes("sham") || 
+               text.includes("night") || text.includes("raat");
+    let isAM = text.includes("am") || text.includes("morning") || text.includes("subah");
+
+    // Special cases: Midnight / Noon
+    if (/\bmidnight\b/.test(text)) {
         hours = 0;
         minutes = 0;
-        // midnight usually refers to the start of the next day if mentioned now
-        const midTime = targetMoment.clone().set({ hour: 0, minute: 0, second: 0 });
-        if (midTime.isBefore(moment(currentDateTime))) {
-            targetMoment.add(1, 'days');
-            normalized.date = targetMoment.format("YYYY-MM-DD");
-        }
-    } else if (text.includes("noon")) {
+        isAM = true;
+    } else if (/\bnoon\b/.test(text)) {
         hours = 12;
         minutes = 0;
+        isPM = true;
     }
 
-    // 8 baje (no AM/PM) cases
+    // STEP 2 & 3: HANDLE TIME CONTEXT AND 12 EDGE CASE
+    if (hours !== null) {
+        if (hours === 12) {
+            // 12 AM logic: night/raat/morning/am -> 00:MM
+            if (text.includes("night") || text.includes("raat") || isAM) {
+                hours = 0;
+            }
+            // 12 PM logic: 12 afternoon/noon/evening/pm stays 12
+        } else if (hours < 12) {
+            // PM conversion: afternoon/evening/night/pm -> +12
+            if (isPM) {
+                hours += 12;
+            }
+        }
+    }
+
+    // 8 baje (no AM/PM) cases - Date adjustment
     if (hours !== null && !isAM && !isPM && !text.includes("am") && !text.includes("pm")) {
         const testTime = targetMoment.clone().set({ hour: hours, minute: minutes });
         
